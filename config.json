@@ -1,0 +1,792 @@
+{
+  "settings": {
+    "slack": {
+      "token_env": "SLACK_BOT_TOKEN",
+      "base_url": "https://slack.com/api",
+      "default_channel_id": ""
+    },
+    "notion": {
+      "token_env": "NOTION_API_KEY",
+      "version": "2022-06-28"
+    },
+    "audit": {
+      "enabled": true,
+      "storage_dir": "audit",
+      "sqlite_path": "audit/audit.db",
+      "jsonl_path": "audit/audit.jsonl",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": "",
+      "notion_last_synced_property": "Last Synced"
+    }
+  },
+  "projects": [
+    {
+      "name": "clear-choice-painting-seo",
+      "slack_channel_id": "C09UZCQ7VQX",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "general-all-team",
+      "slack_channel_id": "C06E1LJDWSE",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "immediate-leave-notifications",
+      "slack_channel_id": "C092KJU99V5",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "otp-and-1pass",
+      "slack_channel_id": "C07CK466MRD",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-all-good-restoration-website-management",
+      "slack_channel_id": "C083QMJMCP7",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-b-tucker-seo",
+      "slack_channel_id": "C0A86HRGXUZ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-butler-garage-door-website-hosting",
+      "slack_channel_id": "C09DVQLHKEW",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-home-solutions-handyman-website-management",
+      "slack_channel_id": "C096QRUEVC2",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-michaelis-gbp-realwork",
+      "slack_channel_id": "C08AF5STC82",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-peak-electric-group-website-hosting",
+      "slack_channel_id": "C0A6RB5HU4W",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-piekarski-tree-ppc",
+      "slack_channel_id": "C0A97H6JX0A",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-process-updates",
+      "slack_channel_id": "C067QL29FU4",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-solar-ips-website-hosting",
+      "slack_channel_id": "C09277L698V",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-spence-and-daves-website",
+      "slack_channel_id": "C0A8X17BZ42",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-website-hosting-and-management-team",
+      "slack_channel_id": "C083VVB03AQ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-website-hosting-migration-completed-forms",
+      "slack_channel_id": "C094E77JHJ5",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "vacation-leave-notices",
+      "slack_channel_id": "C046VR991UY",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "account-status-updates-airtable",
+      "slack_channel_id": "C08053Q665U",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "anything-goes",
+      "slack_channel_id": "C03CZFPT6NS",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "anything-travel",
+      "slack_channel_id": "C07TUG34M6F",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "audits",
+      "slack_channel_id": "C050A9P6NHW",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "call-grading-general",
+      "slack_channel_id": "C07QS9ZD5JA",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "campaign-paused-notifications",
+      "slack_channel_id": "C09AZF5DHGQ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "client-reporting-all-accounts",
+      "slack_channel_id": "C0713QNRH2S",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "gbp-general",
+      "slack_channel_id": "C08L7G4HYB0",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "general",
+      "slack_channel_id": "CBL3N0U9F",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "learning-and-team-training",
+      "slack_channel_id": "C038XHR88F7",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "lsa-accounts-general",
+      "slack_channel_id": "C06SPKR81EG",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "new-churn-alerts-service-scalers",
+      "slack_channel_id": "C07G57C40R2",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "new-switch-of-services-alerts",
+      "slack_channel_id": "C092LJA8Q5U",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "notion-task-board-updates",
+      "slack_channel_id": "C09BBCY2QGY",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "on-radar-accounts",
+      "slack_channel_id": "C08D6P2E2CE",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "reviews-and-customer-feedback",
+      "slack_channel_id": "C07Q71URLUV",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "share-your-recipes",
+      "slack_channel_id": "C07TX44JMHS",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-aaa-electrical-services-website-management-and-hosting",
+      "slack_channel_id": "C08J9P91Z0T",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-account-managers",
+      "slack_channel_id": "C097KQGJKGR",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-ad-spend-client-forms-billing",
+      "slack_channel_id": "C0A7PDQ42SJ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-ad-spend-form-reminders-billing",
+      "slack_channel_id": "C0A7L48QHJP",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-air-handlers-website-management-and-hosting",
+      "slack_channel_id": "C08CCVC95DE",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-all-valley-plumbing-ac-website-hosting",
+      "slack_channel_id": "C08RSNED82Y",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-arcadia-outdoors-lsa",
+      "slack_channel_id": "C0AAGQBLU4D",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-armor-air-website-hosting",
+      "slack_channel_id": "C097PFVSKFY",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-aslan-mechanical-website-management",
+      "slack_channel_id": "C096RJFRTSQ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-assured-insulation-website-management-and-hosting",
+      "slack_channel_id": "C08TEFW0QCA",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-awful-nice-guys-website-management",
+      "slack_channel_id": "C083LU2HL06",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-b-tucker-hvac-website-management",
+      "slack_channel_id": "C08K14ZM615",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-bdk-door-website-hosting",
+      "slack_channel_id": "C09JCEPJXFS",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-ben-franklin-seo",
+      "slack_channel_id": "C0A88JRQYMD",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-blue-swan-service-website-management",
+      "slack_channel_id": "C08L415J5L2",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-buzz-electrical-gbp",
+      "slack_channel_id": "C0A7HBP57RC",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-buzz-electrical-lsa",
+      "slack_channel_id": "C0A7KBZBZ5Y",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-buzz-electrical-ppc",
+      "slack_channel_id": "C0A7CUZ4P0B",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-buzz-electrical-website-hosting",
+      "slack_channel_id": "C0A7CTHJVQT",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-captain-clean-website-edits",
+      "slack_channel_id": "C0A151J4R26",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-clear-choice-painting-website-build",
+      "slack_channel_id": "C08BKV0UVA8",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-clear-choice-roofing-website-management-and-hosting",
+      "slack_channel_id": "C08BH0N61PD",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-dr-rooter-seo-full-service",
+      "slack_channel_id": "C077WSM899P",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-eds-pumps-website-management",
+      "slack_channel_id": "C0A21JKL0E7",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-four-seasons-comfort-website-hosting",
+      "slack_channel_id": "C08RCV1608G",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-gary-air-website-management",
+      "slack_channel_id": "C08U583HP33",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-good-attic-energy-website-management",
+      "slack_channel_id": "C083TELGTFD",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-greenhaus-painting-gbp",
+      "slack_channel_id": "C0A96UE102J",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-greenhaus-painting-seo",
+      "slack_channel_id": "C0A96UYRDQE",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-house-call-company-website-management-and-hosting",
+      "slack_channel_id": "C08FDQFLXQX",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-hughes-hosting",
+      "slack_channel_id": "C08BJD3V3A8",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-kinty-jones-seo-full-service",
+      "slack_channel_id": "C0A0C6LG1BN",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-kinty-jones-website-hosting",
+      "slack_channel_id": "C09FLK3LFNY",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-kinty-jones-website-page-creation",
+      "slack_channel_id": "C08GH8LQPH6",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-lake-county-mechanical-website-hosting",
+      "slack_channel_id": "C0A3KBKTDB7",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-lake-county-mechanical-website-management",
+      "slack_channel_id": "C0A3LP20J5C",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-leo-kob-website-management",
+      "slack_channel_id": "C084GCQL2BS",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-lieber-mechanical-website-management-and-hosting",
+      "slack_channel_id": "C087YRRTUP5",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-magnify-website-management-and-hosting-wp",
+      "slack_channel_id": "C07RX8T33L6",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-master-electric-website-management",
+      "slack_channel_id": "C084GAV2KCG",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-memphis-ice-website-hosting",
+      "slack_channel_id": "C0926SK8Z98",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-michaelis-website-management-and-hosting-",
+      "slack_channel_id": "C086ZSGP5KR",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-minuteman-water-heaters-website-management",
+      "slack_channel_id": "C096BAE8UKE",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-morris-heating-website-management-and-hosting",
+      "slack_channel_id": "C088817UHNY",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-my-calgary-plumber-website",
+      "slack_channel_id": "C0A1013F4HY",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-north-star-services-website-hosting",
+      "slack_channel_id": "C091TJPU8J3",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-one-hour-elk-grove-gbp",
+      "slack_channel_id": "C0AAEL2VA57",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-one-hour-elk-grove-lsa",
+      "slack_channel_id": "C0AA59E2HKN",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-one-hour-elk-grove-seo",
+      "slack_channel_id": "C0AA5ATE7C4",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-one-hour-il-seo",
+      "slack_channel_id": "C0A8HLZL2Q3",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-one-hour-wi-seo",
+      "slack_channel_id": "C0A89UDP9M1",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-orange-exteriors-website-management",
+      "slack_channel_id": "C09110CHQC9",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-pacific-backflow-website-build",
+      "slack_channel_id": "C0894E9BTHN",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-parker-and-co-website",
+      "slack_channel_id": "C0A7C0LGHEE",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-parker-and-co-website-hosting",
+      "slack_channel_id": "C0A3H6Y7RBP",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-performance-of-maine-website-management-and-hosting",
+      "slack_channel_id": "C08FS4SQDUM",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-pinnacle-website-management",
+      "slack_channel_id": "C09SMPGUPKJ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-plumbing-innovations-lp",
+      "slack_channel_id": "C0A60GKMTQA",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-pro-sewer-repair-website-hosting",
+      "slack_channel_id": "C0A0XPSTKM4",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-seacoast-sewer-and-drain-website-hosting",
+      "slack_channel_id": "C09MKTL2BND",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-seaside-plumbing-landing-pages",
+      "slack_channel_id": "C09TCD82K7W",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-seaside-plumbing-website-hosting",
+      "slack_channel_id": "C09STCR3X0X",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-seaside-toolbox-website",
+      "slack_channel_id": "C09TJ5BELBW",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-seo-general",
+      "slack_channel_id": "C08LQLPAW9X",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-service-scalers-training-alerts",
+      "slack_channel_id": "C0A954XRSH0",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-southern-kitchen-services-website-hosting",
+      "slack_channel_id": "C08TXS1GP99",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-storm-solution-call-grading",
+      "slack_channel_id": "C0A73FKC8BH",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-storm-solutions-gbp",
+      "slack_channel_id": "C0A7NB4DQKW",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-storm-solutions-ppc",
+      "slack_channel_id": "C0A739YBL5D",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-storm-solutions-seo",
+      "slack_channel_id": "C0A7CBQ1ZNF",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-storm-solutions-website-edits",
+      "slack_channel_id": "C0A7GMGBMHC",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-storm-solutions-website-hosting",
+      "slack_channel_id": "C0A8D25HZPS",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-sun-heating-and-cooling-website-hosting",
+      "slack_channel_id": "C08M5GL11J6",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-sunshine-services-website-management",
+      "slack_channel_id": "C08TY8N24CD",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-swift-pro-landing-pages",
+      "slack_channel_id": "C0A4JPYN9FZ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-swift-pro-seo",
+      "slack_channel_id": "C0A4JPJHRU7",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-tatay-website-management",
+      "slack_channel_id": "C08UWCTMBNZ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-total-heating-and-cooling-website-management",
+      "slack_channel_id": "C09KSC779PA",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-unified-home-solutions-meta",
+      "slack_channel_id": "C0A936XG0FQ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-unified-home-solutions-website-management",
+      "slack_channel_id": "C0A9J6EML8H",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-website-launched-forms",
+      "slack_channel_id": "C093WGD3N1L",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-westcoast-deck-website-management",
+      "slack_channel_id": "C083LTXQM38",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "webflow-updates-2025",
+      "slack_channel_id": "C0A15V996MP",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "website-migration-checks-typeforms",
+      "slack_channel_id": "C09710V3S6T",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-all-services-huddle-numbers",
+      "slack_channel_id": "C08Q3AAEQ0L",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "service-scalers-website",
+      "slack_channel_id": "C09HB01D1B8",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-website-access-typeforms",
+      "slack_channel_id": "C099V1ZJFS9",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-website-pod",
+      "slack_channel_id": "C085B73T2JE",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "ss-website-tickets",
+      "slack_channel_id": "C09LNC16K55",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "standup",
+      "slack_channel_id": "C02UJJDNFMJ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "web-crew",
+      "slack_channel_id": "C0A3E7XJSKB",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "big-wins-small-wins-alert",
+      "slack_channel_id": "C040LJPHR60",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "new-campaign-alert-service-scalers",
+      "slack_channel_id": "C07GHBL6WSJ",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    },
+    {
+      "name": "parenting-unplugged",
+      "slack_channel_id": "C088Z2HD0H4",
+      "notion_audit_page_id": "",
+      "notion_last_synced_page_id": ""
+    }
+  ]
+}
