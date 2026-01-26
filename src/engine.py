@@ -52,17 +52,26 @@ class ScalersSlackEngine:
             slack_api_base_url=browser_settings.get("slack_api_base_url", "https://slack.com/api"),
             notion_base_url=browser_settings.get("notion_base_url", "https://www.notion.so"),
         )
-        self.browser_enabled = browser_config.enabled
-        self.browser_session = BrowserSession(browser_config) if self.browser_enabled else None
-
         slack_token = os.getenv(slack_settings.get("token_env", "SLACK_BOT_TOKEN"))
         notion_token = os.getenv(notion_settings.get("token_env", "NOTION_API_KEY"))
+
+        needs_browser = browser_config.enabled and (not slack_token or not notion_token)
+        self.browser_enabled = needs_browser
+        if needs_browser:
+            if browser_config.storage_state_path and not os.path.exists(browser_config.storage_state_path):
+                raise RuntimeError(
+                    "Browser automation is enabled but storage_state_path is missing. "
+                    "Create it with Playwright or disable browser_automation."
+                )
+            self.browser_session = BrowserSession(browser_config)
+        else:
+            self.browser_session = None
 
         if slack_client:
             self.slack = slack_client
         elif slack_token:
             self.slack = SlackClient(token=slack_token, base_url=slack_settings["base_url"])
-        elif self.browser_enabled:
+        elif self.browser_session:
             self.slack = SlackBrowserClient(self.browser_session, browser_config)
         else:
             self.slack = SlackClient(token=slack_token, base_url=slack_settings["base_url"])
@@ -71,7 +80,7 @@ class ScalersSlackEngine:
             self.notion = notion_client
         elif notion_token:
             self.notion = NotionClient(token=notion_token, version=notion_settings["version"])
-        elif self.browser_enabled:
+        elif self.browser_session:
             self.notion = NotionBrowserClient(self.browser_session, browser_config)
         else:
             self.notion = NotionClient(token=notion_token, version=notion_settings["version"])
