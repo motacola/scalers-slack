@@ -16,6 +16,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Optional browser automation dependencies (for running without API keys):
+```bash
+pip install -r requirements-browser.txt
+python -m playwright install chromium
+```
+
 Set your API tokens:
 ```bash
 export SLACK_BOT_TOKEN='xoxb-...'
@@ -45,6 +51,25 @@ falls back to `audit/audit.jsonl` so you always have a record of what ran and wh
 ## Configuration
 Edit `config.json` to set channels and Notion pages. The `audit` settings control storage paths.
 Use `settings.slack.pagination` for defaults and `projects[].slack_pagination` to cap page counts per channel.
+
+### Browser Automation Fallback
+If API keys are not available, enable the browser fallback in `config.json`:
+```json
+\"browser_automation\": {
+  \"enabled\": true,
+  \"storage_state_path\": \"browser_storage_state.json\",
+  \"slack_workspace_id\": \"TBLCQAFEG\"
+}
+```
+
+Create a storage state file by logging into Slack/Notion in an automated browser session:
+```bash
+python -m playwright codegen --save-storage browser_storage_state.json https://app.slack.com/client/TBLCQAFEG
+```
+
+Notes:
+- Slack browser fallback uses your logged-in session cookies to call Slack Web API endpoints.
+- Notion browser fallback currently appends audit notes only; Last Synced updates will be logged for manual review.
 
 ## Notes
 - The Slack and Notion APIs require their respective permissions.

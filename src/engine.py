@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from .audit_logger import AuditLogger
+from .browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
 from .config_loader import load_config, get_project
 from .notion_client import NotionClient
 from .slack_client import SlackClient
@@ -38,12 +39,42 @@ class ScalersSlackEngine:
         slack_settings = self.config["settings"]["slack"]
         notion_settings = self.config["settings"]["notion"]
         audit_settings = self.config["settings"]["audit"]
+        browser_settings = self.config["settings"].get("browser_automation", {})
+
+        browser_config = BrowserAutomationConfig(
+            enabled=browser_settings.get("enabled", False),
+            storage_state_path=browser_settings.get("storage_state_path", ""),
+            headless=browser_settings.get("headless", True),
+            slow_mo_ms=_coerce_int(browser_settings.get("slow_mo_ms"), 0),
+            timeout_ms=_coerce_int(browser_settings.get("timeout_ms"), 30000),
+            slack_workspace_id=browser_settings.get("slack_workspace_id", ""),
+            slack_client_url=browser_settings.get("slack_client_url", "https://app.slack.com/client"),
+            slack_api_base_url=browser_settings.get("slack_api_base_url", "https://slack.com/api"),
+            notion_base_url=browser_settings.get("notion_base_url", "https://www.notion.so"),
+        )
+        self.browser_enabled = browser_config.enabled
+        self.browser_session = BrowserSession(browser_config) if self.browser_enabled else None
 
         slack_token = os.getenv(slack_settings.get("token_env", "SLACK_BOT_TOKEN"))
         notion_token = os.getenv(notion_settings.get("token_env", "NOTION_API_KEY"))
 
-        self.slack = slack_client or SlackClient(token=slack_token, base_url=slack_settings["base_url"])
-        self.notion = notion_client or NotionClient(token=notion_token, version=notion_settings["version"])
+        if slack_client:
+            self.slack = slack_client
+        elif slack_token:
+            self.slack = SlackClient(token=slack_token, base_url=slack_settings["base_url"])
+        elif self.browser_enabled:
+            self.slack = SlackBrowserClient(self.browser_session, browser_config)
+        else:
+            self.slack = SlackClient(token=slack_token, base_url=slack_settings["base_url"])
+
+        if notion_client:
+            self.notion = notion_client
+        elif notion_token:
+            self.notion = NotionClient(token=notion_token, version=notion_settings["version"])
+        elif self.browser_enabled:
+            self.notion = NotionBrowserClient(self.browser_session, browser_config)
+        else:
+            self.notion = NotionClient(token=notion_token, version=notion_settings["version"])
         self.audit = audit_logger or AuditLogger(
             enabled=audit_settings.get("enabled", True),
             storage_dir=audit_settings.get("storage_dir", "audit"),
@@ -53,6 +84,7 @@ class ScalersSlackEngine:
         self.thread_extractor = thread_extractor or ThreadExtractor(self.slack)
         self.audit_settings = audit_settings
         self.slack_settings = slack_settings
+        self.browser_config = browser_config
 
     def run_sync(self, project_name: str, since: str | None = None, query: str | None = None, dry_run: bool = False) -> None:
         project = get_project(self.config, project_name)
@@ -67,9 +99,9 @@ class ScalersSlackEngine:
         pagination_overrides = project.get("slack_pagination") or {}
         pagination = {**pagination_defaults, **pagination_overrides}
         history_limit = _coerce_int(pagination.get("history_limit"), 200)
-        history_max_pages = _coerce_int(pagination.get("history_max_pages"), 10)
+        history_max_pages = _coerce_int(pagination.get("history_max_pages"), 5)
         search_limit = _coerce_int(pagination.get("search_limit"), 100)
-        search_max_pages = _coerce_int(pagination.get("search_max_pages"), 5)
+        search_max_pages = _coerce_int(pagination.get("search_max_pages"), 3)
 
         oldest = iso_to_unix_ts(since) if since else None
         sync_timestamp = utc_now_iso()
@@ -127,14 +159,22 @@ class ScalersSlackEngine:
 
     def _write_notion_audit_note(self, note_text: str, page_id: str) -> None:
         action = "notion_audit_note"
+        supports_verification = getattr(self.notion, "supports_verification", True)
         try:
             block_id = self.notion.append_audit_note(page_id, note_text)
-            block = self.notion.get_block(block_id)
-            verified = self._verify_notion_block(block, note_text)
-            if not verified:
-                self.audit.log_review(action, {"page_id": page_id, "block_id": block_id}, error="Note verification failed")
-                return
-            self.audit.log(action, "completed", {"page_id": page_id, "block_id": block_id})
+            if supports_verification:
+                block = self.notion.get_block(block_id)
+                verified = self._verify_notion_block(block, note_text)
+                if not verified:
+                    self.audit.log_review(action, {"page_id": page_id, "block_id": block_id}, error="Note verification failed")
+                    return
+                self.audit.log(action, "completed", {"page_id": page_id, "block_id": block_id})
+            else:
+                self.audit.log_review(
+                    action,
+                    {"page_id": page_id, "block_id": block_id},
+                    error="Browser fallback used; verify audit note manually",
+                )
         except Exception as exc:
             self.audit.log_failure(action, {"page_id": page_id}, error=str(exc))
             raise
@@ -148,7 +188,16 @@ class ScalersSlackEngine:
 
     def _update_notion_last_synced(self, page_id: str, property_name: str, sync_timestamp: str) -> None:
         action = "notion_last_synced"
+        supports_update = getattr(self.notion, "supports_last_synced_update", True)
         try:
+            if not supports_update:
+                self.audit.log_review(
+                    action,
+                    {"page_id": page_id, "expected": sync_timestamp},
+                    error="Browser fallback does not support Last Synced updates yet",
+                )
+                return
+
             self.notion.update_page_property(page_id, property_name, sync_timestamp)
             page = self.notion.get_page(page_id)
             actual = self._extract_notion_date(page, property_name)
@@ -189,6 +238,14 @@ class ScalersSlackEngine:
             self.audit.log_failure(action, {"channel_id": channel_id}, error=str(exc))
             raise
 
+    def close(self) -> None:
+        if not self.browser_session:
+            return
+        try:
+            self.browser_session.close()
+        except Exception:
+            pass
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scalers Slack Automation")
@@ -200,7 +257,10 @@ def main() -> None:
 
     args = parser.parse_args()
     engine = ScalersSlackEngine(config_path=args.config)
-    engine.run_sync(project_name=args.project, since=args.since, query=args.query, dry_run=args.dry_run)
+    try:
+        engine.run_sync(project_name=args.project, since=args.since, query=args.query, dry_run=args.dry_run)
+    finally:
+        engine.close()
 
 
 if __name__ == "__main__":

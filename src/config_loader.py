@@ -9,14 +9,25 @@ DEFAULT_CONFIG = {
             "default_channel_id": "",
             "pagination": {
                 "history_limit": 200,
-                "history_max_pages": 10,
+                "history_max_pages": 5,
                 "search_limit": 100,
-                "search_max_pages": 5
+                "search_max_pages": 3
             }
         },
         "notion": {
             "token_env": "NOTION_API_KEY",
             "version": "2022-06-28"
+        },
+        "browser_automation": {
+            "enabled": False,
+            "storage_state_path": "browser_storage_state.json",
+            "headless": True,
+            "slow_mo_ms": 0,
+            "timeout_ms": 30000,
+            "slack_workspace_id": "",
+            "slack_client_url": "https://app.slack.com/client",
+            "slack_api_base_url": "https://slack.com/api",
+            "notion_base_url": "https://www.notion.so"
         },
         "audit": {
             "enabled": True,
