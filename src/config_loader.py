@@ -46,6 +46,10 @@ DEFAULT_CONFIG = {
             "enable_run_id_idempotency": True
         },
         "validate_config_on_startup": True,
+        "logging": {
+            "json": True,
+            "level": "INFO"
+        },
         "browser_automation": {
             "enabled": False,
             "storage_state_path": "browser_storage_state.json",

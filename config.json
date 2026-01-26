@@ -75,7 +75,11 @@
       "enable_audit": true,
       "enable_run_id_idempotency": true
     },
-    "validate_config_on_startup": true
+    "validate_config_on_startup": true,
+    "logging": {
+      "json": true,
+      "level": "INFO"
+    }
   },
   "projects": [
     {

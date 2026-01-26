@@ -23,7 +23,10 @@ class SlackClient:
         self.retry_jitter: float = 0.25
         self.retry_on_status: set[int] = {408, 429, 500, 502, 503, 504}
         self.retry_on_network_error: bool = True
+        self.stats: dict[str, Any] = {}
+        self.pagination_stats: dict[str, Any] = {}
         self._configure_retries(retry_config or {})
+        self.reset_stats()
 
     def _configure_retries(self, config: dict) -> None:
         self.retry_max_attempts = int(config.get("max_attempts", 5))
@@ -70,6 +73,7 @@ class SlackClient:
         last_error: Exception | None = None
         for attempt in range(1, self.retry_max_attempts + 1):
             try:
+                self.stats["api_calls"] += 1
                 response = requests.request(
                     method,
                     url,
@@ -82,7 +86,10 @@ class SlackClient:
                 last_error = exc
                 if not self.retry_on_network_error or attempt >= self.retry_max_attempts:
                     raise RuntimeError("Slack API network error") from exc
-                time.sleep(self._compute_backoff(attempt))
+                self.stats["retries"] += 1
+                sleep_for = self._compute_backoff(attempt)
+                self.stats["retry_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
             try:
@@ -91,21 +98,31 @@ class SlackClient:
                 last_error = exc
                 if attempt >= self.retry_max_attempts:
                     raise RuntimeError(f"Slack API error: {response.status_code} {response.text}") from exc
-                time.sleep(self._compute_backoff(attempt))
+                self.stats["retries"] += 1
+                sleep_for = self._compute_backoff(attempt)
+                self.stats["retry_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
             if response.status_code == 429 or data.get("error") == "ratelimited":
                 retry_after = self._parse_retry_after(response)
                 if attempt >= self.retry_max_attempts:
                     raise RuntimeError("Slack API rate limited")
-                time.sleep(self._compute_backoff(attempt, retry_after=retry_after))
+                self.stats["retries"] += 1
+                self.stats["rate_limit_hits"] += 1
+                sleep_for = self._compute_backoff(attempt, retry_after=retry_after)
+                self.stats["rate_limit_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
             if response.status_code in self.retry_on_status and response.status_code >= 400:
                 if attempt >= self.retry_max_attempts:
                     error = data.get("error", response.text) if isinstance(data, dict) else response.text
                     raise RuntimeError(f"Slack API error: {response.status_code} {error}")
-                time.sleep(self._compute_backoff(attempt))
+                self.stats["retries"] += 1
+                sleep_for = self._compute_backoff(attempt)
+                self.stats["retry_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
             if response.status_code >= 400:
@@ -166,6 +183,7 @@ class SlackClient:
             if not cursor or page >= max_pages:
                 break
 
+        self._set_pagination_stats("history", page, len(messages))
         return messages
 
     def fetch_thread_replies(self, channel_id: str, thread_ts: str, limit: int = 200) -> list[dict[str, Any]]:
@@ -220,6 +238,7 @@ class SlackClient:
                 break
             page += 1
 
+        self._set_pagination_stats("search", page, len(matches))
         return matches
 
     def update_channel_topic(self, channel_id: str, topic: str) -> None:
@@ -230,3 +249,26 @@ class SlackClient:
         params = {"channel": channel_id}
         data = self._request("GET", "conversations.info", params=params)
         return cast(dict[str, Any], data.get("channel", {}))
+
+    def reset_stats(self) -> None:
+        self.stats = {
+            "api_calls": 0,
+            "retries": 0,
+            "rate_limit_hits": 0,
+            "rate_limit_sleep_s": 0.0,
+            "retry_sleep_s": 0.0,
+        }
+        self.pagination_stats = {}
+
+    def get_stats(self) -> dict[str, Any]:
+        return dict(self.stats)
+
+    def get_pagination_stats(self) -> dict[str, Any]:
+        return dict(self.pagination_stats)
+
+    def _set_pagination_stats(self, method: str, pages: int, messages: int) -> None:
+        self.pagination_stats = {
+            "method": method,
+            "pages": pages,
+            "messages": messages,
+        }

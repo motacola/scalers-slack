@@ -1,18 +1,19 @@
 import argparse
 import logging
 import os
-from typing import Any
+import time
+from typing import Any, cast
 
 from .audit_logger import AuditLogger
 from .browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
 from .config_loader import get_project, load_config
 from .config_validation import validate_or_raise
+from .logging_utils import configure_logging, log_event
 from .notion_client import NotionClient
 from .slack_client import SlackClient
 from .thread_extractor import ThreadExtractor
 from .utils import iso_to_unix_ts, make_run_id, utc_now_iso
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +60,12 @@ class ScalersSlackEngine:
     ):
         self.base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.config = load_config(config_path)
+
+        logging_settings = self.config.get("settings", {}).get("logging", {})
+        logging_json = bool(logging_settings.get("json", True))
+        logging_level = logging_settings.get("level", "INFO")
+        configure_logging(level=logging_level, json_enabled=logging_json)
+        self.json_logging = logging_json
 
         if self.config.get("settings", {}).get("validate_config_on_startup", True):
             validate_or_raise(self.config)
@@ -195,13 +202,34 @@ class ScalersSlackEngine:
                 "started",
                 {"project": project_name, "since": since, "query": query, "run_id": run_id},
             )
+            log_event(
+                logger,
+                action="slack_sync",
+                status="started",
+                project=project_name,
+                run_id=run_id,
+                since=since,
+                query=query,
+                json_enabled=self.json_logging,
+            )
 
             skip_notion = enable_audit and enable_run_id and self.audit.has_run_id(run_id)
             if skip_notion:
                 self.audit.log(action, "run_id_exists", {"project": project_name, "run_id": run_id})
+                log_event(
+                    logger,
+                    action="slack_sync",
+                    status="run_id_exists",
+                    project=project_name,
+                    run_id=run_id,
+                    json_enabled=self.json_logging,
+                )
 
             threads = []
             try:
+                if hasattr(self.slack, "reset_stats"):
+                    self.slack.reset_stats()
+                slack_start = time.monotonic()
                 if query:
                     threads = self.thread_extractor.search_threads(
                         query=query,
@@ -209,6 +237,7 @@ class ScalersSlackEngine:
                         limit=search_limit,
                         max_pages=search_max_pages,
                     )
+                    slack_method = "search"
                 else:
                     threads = self.thread_extractor.fetch_channel_threads(
                         channel_id=channel_id,
@@ -216,23 +245,63 @@ class ScalersSlackEngine:
                         limit=history_limit,
                         max_pages=history_max_pages,
                     )
+                    slack_method = "history"
             except Exception as exc:
                 self.audit.log_failure(action, {"project": project_name}, error=str(exc))
                 raise
 
-            logger.info("Found %s threads", len(threads))
-            self.audit.log(action, "threads_collected", {"count": len(threads), "project": project_name})
+            slack_duration_ms = int((time.monotonic() - slack_start) * 1000)
+            slack_stats = self._get_client_stats(self.slack)
+            pagination_stats = self._get_pagination_stats(self.slack)
+
+            log_event(
+                logger,
+                action="slack_fetch",
+                status="completed",
+                project=project_name,
+                run_id=run_id,
+                method=slack_method,
+                thread_count=len(threads),
+                duration_ms=slack_duration_ms,
+                pagination=pagination_stats,
+                slack_stats=slack_stats,
+                json_enabled=self.json_logging,
+            )
+
+            self.audit.log(
+                action,
+                "threads_collected",
+                {
+                    "count": len(threads),
+                    "project": project_name,
+                    "method": slack_method,
+                    "duration_ms": slack_duration_ms,
+                    "pagination": pagination_stats,
+                    "slack_stats": slack_stats,
+                },
+            )
 
             if dry_run:
                 self.audit.log(action, "dry_run", {"count": len(threads), "project": project_name})
+                log_event(
+                    logger,
+                    action="slack_sync",
+                    status="dry_run",
+                    project=project_name,
+                    run_id=run_id,
+                    thread_count=len(threads),
+                    json_enabled=self.json_logging,
+                )
                 return
 
             notion_written = False
             if not skip_notion:
+                if hasattr(self.notion, "reset_stats"):
+                    self.notion.reset_stats()
                 audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
                 if enable_notion_audit_note and audit_note_page:
                     note_text = self._build_audit_note(project_name, sync_timestamp, threads, run_id, channel_id)
-                    self._write_notion_audit_note(note_text, audit_note_page)
+                    self._write_notion_audit_note(note_text, audit_note_page, run_id)
                     notion_written = True
 
                 last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get(
@@ -240,7 +309,7 @@ class ScalersSlackEngine:
                 )
                 if enable_notion_last_synced and last_synced_page:
                     property_name = self.audit_settings.get("notion_last_synced_property", "Last Synced")
-                    self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp)
+                    self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp, run_id)
                     notion_written = True
 
                 if enable_audit and enable_run_id and notion_written:
@@ -252,9 +321,28 @@ class ScalersSlackEngine:
                     )
 
             if enable_slack_topic_update:
+                slack_topic_start = time.monotonic()
                 self._update_slack_last_synced(channel_id, sync_timestamp)
+                log_event(
+                    logger,
+                    action="slack_topic_update",
+                    status="completed",
+                    project=project_name,
+                    run_id=run_id,
+                    duration_ms=int((time.monotonic() - slack_topic_start) * 1000),
+                    json_enabled=self.json_logging,
+                )
 
             self.audit.log(action, "completed", {"project": project_name, "threads": len(threads), "run_id": run_id})
+            log_event(
+                logger,
+                action="slack_sync",
+                status="completed",
+                project=project_name,
+                run_id=run_id,
+                thread_count=len(threads),
+                json_enabled=self.json_logging,
+            )
         finally:
             if previous_audit_enabled != enable_audit:
                 self.audit.enabled = previous_audit_enabled
@@ -276,10 +364,11 @@ class ScalersSlackEngine:
             f"Threads collected: {len(threads)}. Sample thread_ts: {sample_text}."
         )
 
-    def _write_notion_audit_note(self, note_text: str, page_id: str) -> None:
+    def _write_notion_audit_note(self, note_text: str, page_id: str, run_id: str) -> None:
         action = "notion_audit_note"
         supports_verification = getattr(self.notion, "supports_verification", True)
         try:
+            start_time = time.monotonic()
             block_id = self.notion.append_audit_note(page_id, note_text)
             if supports_verification:
                 block = self.notion.get_block(block_id)
@@ -287,22 +376,55 @@ class ScalersSlackEngine:
                 if not verified:
                     self.audit.log_review(
                         action,
-                        {"page_id": page_id, "block_id": block_id},
+                        {"page_id": page_id, "block_id": block_id, "run_id": run_id},
                         error="Note verification failed",
                     )
                     return
-                self.audit.log(action, "completed", {"page_id": page_id, "block_id": block_id})
+                self.audit.log(action, "completed", {"page_id": page_id, "block_id": block_id, "run_id": run_id})
             else:
                 self.audit.log_review(
                     action,
-                    {"page_id": page_id, "block_id": block_id},
+                    {"page_id": page_id, "block_id": block_id, "run_id": run_id},
                     error="Browser fallback used; verify audit note manually",
                 )
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            log_event(
+                logger,
+                action="notion_audit_note",
+                status="completed",
+                project=None,
+                run_id=run_id,
+                page_id=page_id,
+                block_id=block_id,
+                duration_ms=duration_ms,
+                notion_stats=self._get_client_stats(self.notion),
+                json_enabled=self.json_logging,
+            )
         except Exception as exc:
             if isinstance(self.notion, NotionBrowserClient):
-                self.audit.log_review(action, {"page_id": page_id}, error=str(exc))
+                self.audit.log_review(action, {"page_id": page_id, "run_id": run_id}, error=str(exc))
+                log_event(
+                    logger,
+                    action="notion_audit_note",
+                    status="review",
+                    project=None,
+                    run_id=run_id,
+                    page_id=page_id,
+                    error=str(exc),
+                    json_enabled=self.json_logging,
+                )
                 return
-            self.audit.log_failure(action, {"page_id": page_id}, error=str(exc))
+            self.audit.log_failure(action, {"page_id": page_id, "run_id": run_id}, error=str(exc))
+            log_event(
+                logger,
+                action="notion_audit_note",
+                status="failed",
+                project=None,
+                run_id=run_id,
+                page_id=page_id,
+                error=str(exc),
+                json_enabled=self.json_logging,
+            )
             raise
 
     def _verify_notion_block(self, block: dict, expected_text: str) -> bool:
@@ -312,15 +434,26 @@ class ScalersSlackEngine:
         text = "".join([item.get("plain_text", "") for item in rich_text])
         return expected_text.strip() == text.strip()
 
-    def _update_notion_last_synced(self, page_id: str, property_name: str, sync_timestamp: str) -> None:
+    def _update_notion_last_synced(self, page_id: str, property_name: str, sync_timestamp: str, run_id: str) -> None:
         action = "notion_last_synced"
         supports_update = getattr(self.notion, "supports_last_synced_update", True)
         try:
+            start_time = time.monotonic()
             if not supports_update:
                 self.audit.log_review(
                     action,
-                    {"page_id": page_id, "expected": sync_timestamp},
+                    {"page_id": page_id, "expected": sync_timestamp, "run_id": run_id},
                     error="Browser fallback does not support Last Synced updates yet",
+                )
+                log_event(
+                    logger,
+                    action="notion_last_synced",
+                    status="review",
+                    project=None,
+                    run_id=run_id,
+                    page_id=page_id,
+                    expected=sync_timestamp,
+                    json_enabled=self.json_logging,
                 )
                 return
 
@@ -330,16 +463,60 @@ class ScalersSlackEngine:
             if actual != sync_timestamp:
                 self.audit.log_review(
                     action,
-                    {"page_id": page_id, "expected": sync_timestamp, "actual": actual},
+                    {"page_id": page_id, "expected": sync_timestamp, "actual": actual, "run_id": run_id},
                     error="Last Synced verification failed",
                 )
+                log_event(
+                    logger,
+                    action="notion_last_synced",
+                    status="review",
+                    project=None,
+                    run_id=run_id,
+                    page_id=page_id,
+                    expected=sync_timestamp,
+                    actual=actual,
+                    json_enabled=self.json_logging,
+                )
                 return
-            self.audit.log(action, "completed", {"page_id": page_id, "value": sync_timestamp})
+            self.audit.log(action, "completed", {"page_id": page_id, "value": sync_timestamp, "run_id": run_id})
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            log_event(
+                logger,
+                action="notion_last_synced",
+                status="completed",
+                project=None,
+                run_id=run_id,
+                page_id=page_id,
+                value=sync_timestamp,
+                duration_ms=duration_ms,
+                notion_stats=self._get_client_stats(self.notion),
+                json_enabled=self.json_logging,
+            )
         except Exception as exc:
             if isinstance(self.notion, NotionBrowserClient):
-                self.audit.log_review(action, {"page_id": page_id}, error=str(exc))
+                self.audit.log_review(action, {"page_id": page_id, "run_id": run_id}, error=str(exc))
+                log_event(
+                    logger,
+                    action="notion_last_synced",
+                    status="review",
+                    project=None,
+                    run_id=run_id,
+                    page_id=page_id,
+                    error=str(exc),
+                    json_enabled=self.json_logging,
+                )
                 return
-            self.audit.log_failure(action, {"page_id": page_id}, error=str(exc))
+            self.audit.log_failure(action, {"page_id": page_id, "run_id": run_id}, error=str(exc))
+            log_event(
+                logger,
+                action="notion_last_synced",
+                status="failed",
+                project=None,
+                run_id=run_id,
+                page_id=page_id,
+                error=str(exc),
+                json_enabled=self.json_logging,
+            )
             raise
 
     def _extract_notion_date(self, page: dict, property_name: str) -> str | None:
@@ -366,6 +543,16 @@ class ScalersSlackEngine:
         except Exception as exc:
             self.audit.log_failure(action, {"channel_id": channel_id}, error=str(exc))
             raise
+
+    def _get_client_stats(self, client: object) -> dict[str, Any]:
+        if hasattr(client, "get_stats"):
+            return cast(dict[str, Any], client.get_stats())
+        return {}
+
+    def _get_pagination_stats(self, client: object) -> dict[str, Any]:
+        if hasattr(client, "get_pagination_stats"):
+            return cast(dict[str, Any], client.get_pagination_stats())
+        return {}
 
     def close(self) -> None:
         if not self.browser_session:

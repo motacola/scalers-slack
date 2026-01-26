@@ -64,6 +64,12 @@ Use `settings.slack.retries` / `settings.notion.retries` to adjust retry behavio
 
 The sync run uses a deterministic Run ID (based on project, since/query, and date) to avoid duplicate Notion writes.
 
+Structured logs (JSON by default) include project, action, status, duration, and API stats.
+Configure via:
+```json
+\"logging\": { \"json\": true, \"level\": \"INFO\" }
+```
+
 Feature toggles:
 ```json
 \"features\": {

@@ -72,6 +72,9 @@ class SlackBrowserClient:
     def __init__(self, session: BrowserSession, config: BrowserAutomationConfig):
         self.session = session
         self.config = config
+        self.stats: dict[str, Any] = {}
+        self.pagination_stats: dict[str, Any] = {}
+        self.reset_stats()
 
     def _slack_client_home(self) -> str:
         if self.config.slack_workspace_id:
@@ -130,6 +133,10 @@ class SlackBrowserClient:
         status = result.get("status")
         data = cast(dict[str, Any], result.get("data") or {})
 
+        self.stats["api_calls"] += 1
+        if status == 429:
+            self.stats["rate_limit_hits"] += 1
+
         if status and status >= 400:
             error = data.get("error") if isinstance(data, dict) else "unknown_error"
             raise RuntimeError(f"Slack API error (browser): {status} {error}")
@@ -168,6 +175,7 @@ class SlackBrowserClient:
             page += 1
             if not cursor or page >= max_pages:
                 break
+        self._set_pagination_stats("history", page, len(messages))
         return messages
 
     def search_messages_paginated(self, query: str, count: int = 100, max_pages: int = 5) -> list[dict]:
@@ -183,6 +191,7 @@ class SlackBrowserClient:
             if not total_pages or page >= total_pages or page >= max_pages:
                 break
             page += 1
+        self._set_pagination_stats("search", page, len(matches))
         return matches
 
     def update_channel_topic(self, channel_id: str, topic: str) -> None:
@@ -195,6 +204,29 @@ class SlackBrowserClient:
     def auth_test(self) -> dict[str, Any]:
         return self._slack_api_call("auth.test")
 
+    def reset_stats(self) -> None:
+        self.stats = {
+            "api_calls": 0,
+            "retries": 0,
+            "rate_limit_hits": 0,
+            "rate_limit_sleep_s": 0.0,
+            "retry_sleep_s": 0.0,
+        }
+        self.pagination_stats = {}
+
+    def get_stats(self) -> dict[str, Any]:
+        return dict(self.stats)
+
+    def get_pagination_stats(self) -> dict[str, Any]:
+        return dict(self.pagination_stats)
+
+    def _set_pagination_stats(self, method: str, pages: int, messages: int) -> None:
+        self.pagination_stats = {
+            "method": method,
+            "pages": pages,
+            "messages": messages,
+        }
+
 
 class NotionBrowserClient:
     supports_verification = False
@@ -203,6 +235,8 @@ class NotionBrowserClient:
     def __init__(self, session: BrowserSession, config: BrowserAutomationConfig):
         self.session = session
         self.config = config
+        self.stats: dict[str, Any] = {}
+        self.reset_stats()
 
     def _with_page(self, url: str, func):
         page = self.session.new_page(url)
@@ -226,6 +260,7 @@ class NotionBrowserClient:
             page.keyboard.press("Enter")
 
         self._with_page(url, action)
+        self.stats["ui_actions"] += 1
         return "browser-note"
 
     def get_block(self, block_id: str) -> dict:
@@ -257,9 +292,19 @@ class NotionBrowserClient:
             page.keyboard.press("Enter")
 
         self._with_page(url, action)
+        self.stats["ui_actions"] += 1
 
     def get_page(self, page_id: str) -> dict:
         return {}
+
+    def reset_stats(self) -> None:
+        self.stats = {
+            "ui_actions": 0,
+            "errors": 0,
+        }
+
+    def get_stats(self) -> dict[str, Any]:
+        return dict(self.stats)
 
     def check_page_access(self, page_id: str) -> bool:
         url = self._page_url(page_id)

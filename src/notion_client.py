@@ -25,7 +25,9 @@ class NotionClient:
         self.retry_on_status: set[int] = {408, 429, 500, 502, 503, 504}
         self.retry_on_network_error: bool = True
         self.retry_non_idempotent: bool = False
+        self.stats: dict[str, Any] = {}
         self._configure_retries(retry_config or {})
+        self.reset_stats()
 
     def _configure_retries(self, config: dict) -> None:
         self.retry_max_attempts = int(config.get("max_attempts", 5))
@@ -73,6 +75,7 @@ class NotionClient:
         last_error: Exception | None = None
         for attempt in range(1, self.retry_max_attempts + 1):
             try:
+                self.stats["api_calls"] += 1
                 response = requests.request(
                     method,
                     url,
@@ -86,20 +89,30 @@ class NotionClient:
                     raise RuntimeError("Notion API network error") from exc
                 if attempt >= self.retry_max_attempts:
                     raise RuntimeError("Notion API network error") from exc
-                time.sleep(self._compute_backoff(attempt))
+                self.stats["retries"] += 1
+                sleep_for = self._compute_backoff(attempt)
+                self.stats["retry_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
             retry_after = self._parse_retry_after(response)
             if response.status_code == 429:
                 if attempt >= self.retry_max_attempts:
                     raise RuntimeError("Notion API rate limited")
-                time.sleep(self._compute_backoff(attempt, retry_after=retry_after))
+                self.stats["retries"] += 1
+                self.stats["rate_limit_hits"] += 1
+                sleep_for = self._compute_backoff(attempt, retry_after=retry_after)
+                self.stats["rate_limit_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
             if response.status_code in self.retry_on_status and response.status_code >= 400:
                 if attempt >= self.retry_max_attempts:
                     raise RuntimeError(f"Notion API error: {response.status_code} {response.text}")
-                time.sleep(self._compute_backoff(attempt, retry_after=retry_after))
+                self.stats["retries"] += 1
+                sleep_for = self._compute_backoff(attempt, retry_after=retry_after)
+                self.stats["retry_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
             if response.status_code >= 400:
@@ -111,7 +124,10 @@ class NotionClient:
                 last_error = exc
                 if attempt >= self.retry_max_attempts:
                     raise RuntimeError(f"Notion API error: {response.status_code} {response.text}") from exc
-                time.sleep(self._compute_backoff(attempt))
+                self.stats["retries"] += 1
+                sleep_for = self._compute_backoff(attempt)
+                self.stats["retry_sleep_s"] += sleep_for
+                time.sleep(sleep_for)
                 continue
 
         if last_error:
@@ -151,3 +167,15 @@ class NotionClient:
 
     def get_page(self, page_id: str) -> dict:
         return self._request("GET", f"pages/{page_id}")
+
+    def reset_stats(self) -> None:
+        self.stats = {
+            "api_calls": 0,
+            "retries": 0,
+            "rate_limit_hits": 0,
+            "rate_limit_sleep_s": 0.0,
+            "retry_sleep_s": 0.0,
+        }
+
+    def get_stats(self) -> dict[str, Any]:
+        return dict(self.stats)
