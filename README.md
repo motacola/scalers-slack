@@ -56,6 +56,26 @@ Use `settings.slack.retries` / `settings.notion.retries` to adjust retry behavio
 
 The sync run uses a deterministic Run ID (based on project, since/query, and date) to avoid duplicate Notion writes.
 
+Feature toggles:
+```json
+\"features\": {
+  \"enable_notion_audit_note\": true,
+  \"enable_notion_last_synced\": true,
+  \"enable_slack_topic_update\": true,
+  \"enable_audit\": true,
+  \"enable_run_id_idempotency\": true
+}
+```
+Each project can override these flags by adding the same keys to the project object.
+
+Config validation runs on startup (set `settings.validate_config_on_startup` to `false` to skip).
+If Notion page IDs are not yet configured, keep `enable_notion_audit_note` / `enable_notion_last_synced` disabled to avoid validation failures.
+
+Validate config only:
+```bash
+python -m src.engine --validate-config
+```
+
 ### Browser Automation Fallback
 If API keys are not available, enable the browser fallback in `config.json`:
 ```json

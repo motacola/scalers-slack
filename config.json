@@ -67,7 +67,15 @@
       "slack_client_url": "https://app.slack.com/client",
       "slack_api_base_url": "https://slack.com/api",
       "notion_base_url": "https://www.notion.so"
-    }
+    },
+    "features": {
+      "enable_notion_audit_note": false,
+      "enable_notion_last_synced": false,
+      "enable_slack_topic_update": true,
+      "enable_audit": true,
+      "enable_run_id_idempotency": true
+    },
+    "validate_config_on_startup": true
   },
   "projects": [
     {

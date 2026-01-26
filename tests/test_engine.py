@@ -10,6 +10,7 @@ class StubAuditLogger:
     def __init__(self):
         self.records = []
         self.run_ids = set()
+        self.enabled = True
 
     def log(self, action, status, details=None, error=None):
         self.records.append({"action": action, "status": status, "details": details, "error": error})
@@ -49,6 +50,7 @@ class EngineDryRunTests(unittest.TestCase):
                 "slack": {"token_env": "SLACK_BOT_TOKEN", "base_url": "https://slack.com/api", "default_channel_id": ""},
                 "notion": {"token_env": "NOTION_API_KEY", "version": "2022-06-28"},
                 "audit": {"enabled": False},
+                "validate_config_on_startup": False,
             },
             "projects": [
                 {

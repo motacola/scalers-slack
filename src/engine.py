@@ -6,6 +6,7 @@ from typing import Any
 from .audit_logger import AuditLogger
 from .browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
 from .config_loader import load_config, get_project
+from .config_validation import validate_or_raise
 from .notion_client import NotionClient
 from .slack_client import SlackClient
 from .thread_extractor import ThreadExtractor
@@ -24,6 +25,13 @@ def _coerce_int(value: object, default: int) -> int:
         return default
 
 
+def _effective_feature(feature_settings: dict, project: dict, key: str) -> bool:
+    project_value = project.get(key)
+    if project_value is None:
+        return bool(feature_settings.get(key, True))
+    return bool(project_value)
+
+
 class ScalersSlackEngine:
     def __init__(
         self,
@@ -36,10 +44,14 @@ class ScalersSlackEngine:
         self.base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.config = load_config(config_path)
 
+        if self.config.get("settings", {}).get("validate_config_on_startup", True):
+            validate_or_raise(self.config)
+
         slack_settings = self.config["settings"]["slack"]
         notion_settings = self.config["settings"]["notion"]
         audit_settings = self.config["settings"]["audit"]
         browser_settings = self.config["settings"].get("browser_automation", {})
+        feature_settings = self.config["settings"].get("features", {})
 
         browser_config = BrowserAutomationConfig(
             enabled=browser_settings.get("enabled", False),
@@ -117,6 +129,7 @@ class ScalersSlackEngine:
         self.thread_extractor = thread_extractor or ThreadExtractor(self.slack)
         self.audit_settings = audit_settings
         self.slack_settings = slack_settings
+        self.feature_settings = feature_settings
         self.browser_config = browser_config
 
     def run_sync(self, project_name: str, since: str | None = None, query: str | None = None, dry_run: bool = False) -> None:
@@ -141,64 +154,80 @@ class ScalersSlackEngine:
         run_date = sync_timestamp.split("T")[0]
         run_id = make_run_id(project_name, since, query, run_date)
 
+        enable_audit = _effective_feature(self.feature_settings, project, "enable_audit")
+        enable_notion_audit_note = _effective_feature(self.feature_settings, project, "enable_notion_audit_note")
+        enable_notion_last_synced = _effective_feature(self.feature_settings, project, "enable_notion_last_synced")
+        enable_slack_topic_update = _effective_feature(self.feature_settings, project, "enable_slack_topic_update")
+        enable_run_id = _effective_feature(self.feature_settings, project, "enable_run_id_idempotency")
+
+        previous_audit_enabled = self.audit.enabled
+        if previous_audit_enabled != enable_audit:
+            self.audit.enabled = enable_audit
+
         action = "slack_sync"
-        self.audit.log(action, "started", {"project": project_name, "since": since, "query": query, "run_id": run_id})
-
-        skip_notion = self.audit.has_run_id(run_id)
-        if skip_notion:
-            self.audit.log(action, "run_id_exists", {"project": project_name, "run_id": run_id})
-
-        threads = []
         try:
-            if query:
-                threads = self.thread_extractor.search_threads(
-                    query=query,
-                    channel_id=channel_id,
-                    limit=search_limit,
-                    max_pages=search_max_pages,
-                )
-            else:
-                threads = self.thread_extractor.fetch_channel_threads(
-                    channel_id=channel_id,
-                    oldest=oldest,
-                    limit=history_limit,
-                    max_pages=history_max_pages,
-                )
-        except Exception as exc:
-            self.audit.log_failure(action, {"project": project_name}, error=str(exc))
-            raise
+            self.audit.log(action, "started", {"project": project_name, "since": since, "query": query, "run_id": run_id})
 
-        logger.info("Found %s threads", len(threads))
-        self.audit.log(action, "threads_collected", {"count": len(threads), "project": project_name})
+            skip_notion = enable_audit and enable_run_id and self.audit.has_run_id(run_id)
+            if skip_notion:
+                self.audit.log(action, "run_id_exists", {"project": project_name, "run_id": run_id})
 
-        if dry_run:
-            self.audit.log(action, "dry_run", {"count": len(threads), "project": project_name})
-            return
+            threads = []
+            try:
+                if query:
+                    threads = self.thread_extractor.search_threads(
+                        query=query,
+                        channel_id=channel_id,
+                        limit=search_limit,
+                        max_pages=search_max_pages,
+                    )
+                else:
+                    threads = self.thread_extractor.fetch_channel_threads(
+                        channel_id=channel_id,
+                        oldest=oldest,
+                        limit=history_limit,
+                        max_pages=history_max_pages,
+                    )
+            except Exception as exc:
+                self.audit.log_failure(action, {"project": project_name}, error=str(exc))
+                raise
 
-        notion_written = False
-        if not skip_notion:
-            audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
-            if audit_note_page:
-                note_text = self._build_audit_note(project_name, sync_timestamp, threads, run_id, channel_id)
-                self._write_notion_audit_note(note_text, audit_note_page)
-                notion_written = True
+            logger.info("Found %s threads", len(threads))
+            self.audit.log(action, "threads_collected", {"count": len(threads), "project": project_name})
 
-            last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get("notion_last_synced_page_id")
-            if last_synced_page:
-                property_name = self.audit_settings.get("notion_last_synced_property", "Last Synced")
-                self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp)
-                notion_written = True
+            if dry_run:
+                self.audit.log(action, "dry_run", {"count": len(threads), "project": project_name})
+                return
 
-            if notion_written:
-                self.audit.record_run_id(
-                    run_id,
-                    project_name,
-                    status="notion_written",
-                    details={"since": since, "query": query},
-                )
+            notion_written = False
+            if not skip_notion:
+                audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
+                if enable_notion_audit_note and audit_note_page:
+                    note_text = self._build_audit_note(project_name, sync_timestamp, threads, run_id, channel_id)
+                    self._write_notion_audit_note(note_text, audit_note_page)
+                    notion_written = True
 
-        self._update_slack_last_synced(channel_id, sync_timestamp)
-        self.audit.log(action, "completed", {"project": project_name, "threads": len(threads), "run_id": run_id})
+                last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get("notion_last_synced_page_id")
+                if enable_notion_last_synced and last_synced_page:
+                    property_name = self.audit_settings.get("notion_last_synced_property", "Last Synced")
+                    self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp)
+                    notion_written = True
+
+                if enable_audit and enable_run_id and notion_written:
+                    self.audit.record_run_id(
+                        run_id,
+                        project_name,
+                        status="notion_written",
+                        details={"since": since, "query": query},
+                    )
+
+            if enable_slack_topic_update:
+                self._update_slack_last_synced(channel_id, sync_timestamp)
+
+            self.audit.log(action, "completed", {"project": project_name, "threads": len(threads), "run_id": run_id})
+        finally:
+            if previous_audit_enabled != enable_audit:
+                self.audit.enabled = previous_audit_enabled
 
     def _build_audit_note(
         self,
@@ -316,12 +345,22 @@ class ScalersSlackEngine:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scalers Slack Automation")
     parser.add_argument("--config", default="config.json", help="Path to config.json")
-    parser.add_argument("--project", required=True, help="Project name from config.json")
+    parser.add_argument("--project", help="Project name from config.json")
     parser.add_argument("--since", help="ISO8601 timestamp (e.g. 2024-01-01T00:00:00Z)")
     parser.add_argument("--query", help="Slack search query")
     parser.add_argument("--dry-run", action="store_true", help="Collect threads but skip writes")
+    parser.add_argument("--validate-config", action="store_true", help="Validate config and exit")
 
     args = parser.parse_args()
+    if args.validate_config:
+        config = load_config(args.config)
+        validate_or_raise(config)
+        print("Config OK")
+        return
+
+    if not args.project:
+        parser.error("--project is required unless --validate-config is used")
+
     engine = ScalersSlackEngine(config_path=args.config)
     try:
         engine.run_sync(project_name=args.project, since=args.since, query=args.query, dry_run=args.dry_run)

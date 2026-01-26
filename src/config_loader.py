@@ -37,6 +37,14 @@ DEFAULT_CONFIG = {
                 "retry_non_idempotent": False
             }
         },
+        "features": {
+            "enable_notion_audit_note": True,
+            "enable_notion_last_synced": True,
+            "enable_slack_topic_update": True,
+            "enable_audit": True,
+            "enable_run_id_idempotency": True
+        },
+        "validate_config_on_startup": True,
         "browser_automation": {
             "enabled": False,
             "storage_state_path": "browser_storage_state.json",
