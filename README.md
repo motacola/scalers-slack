@@ -44,6 +44,7 @@ falls back to `audit/audit.jsonl` so you always have a record of what ran and wh
 
 ## Configuration
 Edit `config.json` to set channels and Notion pages. The `audit` settings control storage paths.
+Use `settings.slack.pagination` for defaults and `projects[].slack_pagination` to cap page counts per channel.
 
 ## Notes
 - The Slack and Notion APIs require their respective permissions.

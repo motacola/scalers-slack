@@ -6,7 +6,13 @@ DEFAULT_CONFIG = {
         "slack": {
             "token_env": "SLACK_BOT_TOKEN",
             "base_url": "https://slack.com/api",
-            "default_channel_id": ""
+            "default_channel_id": "",
+            "pagination": {
+                "history_limit": 200,
+                "history_max_pages": 10,
+                "search_limit": 100,
+                "search_max_pages": 5
+            }
         },
         "notion": {
             "token_env": "NOTION_API_KEY",

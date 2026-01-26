@@ -14,8 +14,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
+def _coerce_int(value: object, default: int) -> int:
+    try:
+        if value is None or value == "":
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class ScalersSlackEngine:
-    def __init__(self, config_path: str = "config.json"):
+    def __init__(
+        self,
+        config_path: str = "config.json",
+        slack_client: SlackClient | None = None,
+        notion_client: NotionClient | None = None,
+        audit_logger: AuditLogger | None = None,
+        thread_extractor: ThreadExtractor | None = None,
+    ):
         self.base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.config = load_config(config_path)
 
@@ -26,15 +42,15 @@ class ScalersSlackEngine:
         slack_token = os.getenv(slack_settings.get("token_env", "SLACK_BOT_TOKEN"))
         notion_token = os.getenv(notion_settings.get("token_env", "NOTION_API_KEY"))
 
-        self.slack = SlackClient(token=slack_token, base_url=slack_settings["base_url"])
-        self.notion = NotionClient(token=notion_token, version=notion_settings["version"])
-        self.audit = AuditLogger(
+        self.slack = slack_client or SlackClient(token=slack_token, base_url=slack_settings["base_url"])
+        self.notion = notion_client or NotionClient(token=notion_token, version=notion_settings["version"])
+        self.audit = audit_logger or AuditLogger(
             enabled=audit_settings.get("enabled", True),
             storage_dir=audit_settings.get("storage_dir", "audit"),
             sqlite_path=audit_settings.get("sqlite_path", "audit/audit.db"),
             jsonl_path=audit_settings.get("jsonl_path", "audit/audit.jsonl"),
         )
-        self.thread_extractor = ThreadExtractor(self.slack)
+        self.thread_extractor = thread_extractor or ThreadExtractor(self.slack)
         self.audit_settings = audit_settings
         self.slack_settings = slack_settings
 
@@ -47,6 +63,14 @@ class ScalersSlackEngine:
         if not channel_id:
             raise RuntimeError("Slack channel ID is required in config.json")
 
+        pagination_defaults = self.slack_settings.get("pagination", {})
+        pagination_overrides = project.get("slack_pagination") or {}
+        pagination = {**pagination_defaults, **pagination_overrides}
+        history_limit = _coerce_int(pagination.get("history_limit"), 200)
+        history_max_pages = _coerce_int(pagination.get("history_max_pages"), 10)
+        search_limit = _coerce_int(pagination.get("search_limit"), 100)
+        search_max_pages = _coerce_int(pagination.get("search_max_pages"), 5)
+
         oldest = iso_to_unix_ts(since) if since else None
         sync_timestamp = utc_now_iso()
 
@@ -56,9 +80,19 @@ class ScalersSlackEngine:
         threads = []
         try:
             if query:
-                threads = self.thread_extractor.search_threads(query=query, channel_id=channel_id)
+                threads = self.thread_extractor.search_threads(
+                    query=query,
+                    channel_id=channel_id,
+                    limit=search_limit,
+                    max_pages=search_max_pages,
+                )
             else:
-                threads = self.thread_extractor.fetch_channel_threads(channel_id=channel_id, oldest=oldest)
+                threads = self.thread_extractor.fetch_channel_threads(
+                    channel_id=channel_id,
+                    oldest=oldest,
+                    limit=history_limit,
+                    max_pages=history_max_pages,
+                )
         except Exception as exc:
             self.audit.log_failure(action, {"project": project_name}, error=str(exc))
             raise

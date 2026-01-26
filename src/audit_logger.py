@@ -28,7 +28,9 @@ class AuditLogger:
             self._db_initialized = False
 
     def _init_db(self) -> None:
-        os.makedirs(os.path.dirname(self.sqlite_path), exist_ok=True)
+        directory = os.path.dirname(self.sqlite_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         with sqlite3.connect(self.sqlite_path) as connection:
             connection.execute(
                 """
@@ -84,6 +86,8 @@ class AuditLogger:
         self.log(action=action, status="failed", details=details, error=error)
 
     def _write_jsonl(self, record: dict) -> None:
-        os.makedirs(os.path.dirname(self.jsonl_path), exist_ok=True)
+        directory = os.path.dirname(self.jsonl_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         with open(self.jsonl_path, "a") as handle:
             handle.write(json.dumps(record, ensure_ascii=True) + "\n")
