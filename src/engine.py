@@ -5,12 +5,12 @@ from typing import Any
 
 from .audit_logger import AuditLogger
 from .browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
-from .config_loader import load_config, get_project
+from .config_loader import get_project, load_config
 from .config_validation import validate_or_raise
 from .notion_client import NotionClient
 from .slack_client import SlackClient
 from .thread_extractor import ThreadExtractor
-from .utils import iso_to_unix_ts, utc_now_iso, make_run_id
+from .utils import iso_to_unix_ts, make_run_id, utc_now_iso
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -20,7 +20,13 @@ def _coerce_int(value: object, default: int) -> int:
     try:
         if value is None or value == "":
             return default
-        return int(value)
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            return int(value)
+        return default
     except (TypeError, ValueError):
         return default
 
@@ -89,12 +95,12 @@ class ScalersSlackEngine:
                     "Browser automation is enabled but storage_state_path is missing. "
                     "Create it with Playwright or disable browser_automation."
                 )
-            self.browser_session = BrowserSession(browser_config)
+            self.browser_session: BrowserSession | None = BrowserSession(browser_config)
         else:
             self.browser_session = None
 
         if slack_client:
-            self.slack = slack_client
+            self.slack: SlackClient | SlackBrowserClient = slack_client
         elif slack_token:
             self.slack = SlackClient(
                 token=slack_token,
@@ -113,7 +119,7 @@ class ScalersSlackEngine:
             )
 
         if notion_client:
-            self.notion = notion_client
+            self.notion: NotionClient | NotionBrowserClient = notion_client
         elif notion_token:
             self.notion = NotionClient(
                 token=notion_token,
@@ -142,7 +148,13 @@ class ScalersSlackEngine:
         self.feature_settings = feature_settings
         self.browser_config = browser_config
 
-    def run_sync(self, project_name: str, since: str | None = None, query: str | None = None, dry_run: bool = False) -> None:
+    def run_sync(
+        self,
+        project_name: str,
+        since: str | None = None,
+        query: str | None = None,
+        dry_run: bool = False,
+    ) -> None:
         project = get_project(self.config, project_name)
         if not project:
             raise RuntimeError(f"Project '{project_name}' not found in config.json")
@@ -178,7 +190,11 @@ class ScalersSlackEngine:
 
         action = "slack_sync"
         try:
-            self.audit.log(action, "started", {"project": project_name, "since": since, "query": query, "run_id": run_id})
+            self.audit.log(
+                action,
+                "started",
+                {"project": project_name, "since": since, "query": query, "run_id": run_id},
+            )
 
             skip_notion = enable_audit and enable_run_id and self.audit.has_run_id(run_id)
             if skip_notion:
@@ -219,7 +235,9 @@ class ScalersSlackEngine:
                     self._write_notion_audit_note(note_text, audit_note_page)
                     notion_written = True
 
-                last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get("notion_last_synced_page_id")
+                last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get(
+                    "notion_last_synced_page_id"
+                )
                 if enable_notion_last_synced and last_synced_page:
                     property_name = self.audit_settings.get("notion_last_synced_property", "Last Synced")
                     self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp)
@@ -267,7 +285,11 @@ class ScalersSlackEngine:
                 block = self.notion.get_block(block_id)
                 verified = self._verify_notion_block(block, note_text)
                 if not verified:
-                    self.audit.log_review(action, {"page_id": page_id, "block_id": block_id}, error="Note verification failed")
+                    self.audit.log_review(
+                        action,
+                        {"page_id": page_id, "block_id": block_id},
+                        error="Note verification failed",
+                    )
                     return
                 self.audit.log(action, "completed", {"page_id": page_id, "block_id": block_id})
             else:

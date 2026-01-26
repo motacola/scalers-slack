@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from src.browser_automation import BrowserAutomationConfig, BrowserSession, SlackBrowserClient, NotionBrowserClient
+from src.browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
 from src.config_loader import load_config
 
 

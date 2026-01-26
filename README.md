@@ -16,6 +16,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Dev tools:
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+mypy src
+pytest
+```
+
 Optional browser automation dependencies (for running without API keys):
 ```bash
 pip install -r requirements-browser.txt

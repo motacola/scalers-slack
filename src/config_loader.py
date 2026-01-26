@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any, cast
 
 DEFAULT_CONFIG = {
     "settings": {
@@ -70,14 +71,14 @@ DEFAULT_CONFIG = {
 }
 
 
-def load_config(config_path: str) -> dict:
+def load_config(config_path: str) -> dict[str, Any]:
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     full_path = os.path.join(base_path, config_path)
-    config = json.loads(json.dumps(DEFAULT_CONFIG))
+    config = cast(dict[str, Any], json.loads(json.dumps(DEFAULT_CONFIG)))
 
     if os.path.exists(full_path):
         with open(full_path, "r") as handle:
-            user_config = json.load(handle)
+            user_config = cast(dict[str, Any], json.load(handle))
         if "settings" in user_config:
             for key, value in user_config["settings"].items():
                 if isinstance(value, dict) and key in config["settings"]:
@@ -90,8 +91,8 @@ def load_config(config_path: str) -> dict:
     return config
 
 
-def get_project(config: dict, name: str) -> dict | None:
+def get_project(config: dict[str, Any], name: str) -> dict[str, Any] | None:
     for project in config.get("projects", []):
         if project.get("name") == name:
-            return project
+            return cast(dict[str, Any], project)
     return None

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
+_sync_playwright: Any = None
 try:
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright as _sync_playwright
 except ImportError:  # pragma: no cover - optional dependency
-    sync_playwright = None
+    pass
+
+sync_playwright: Any = _sync_playwright
 
 
 @dataclass
@@ -26,9 +29,9 @@ class BrowserAutomationConfig:
 class BrowserSession:
     def __init__(self, config: BrowserAutomationConfig):
         self.config = config
-        self._playwright = None
-        self._browser = None
-        self._context = None
+        self._playwright: Any = None
+        self._browser: Any = None
+        self._context: Any = None
 
     def start(self) -> None:
         if self._context:
@@ -82,7 +85,13 @@ class SlackBrowserClient:
         finally:
             page.close()
 
-    def _slack_api_call(self, endpoint: str, params: dict | None = None, method: str = "GET", body: dict | None = None) -> dict:
+    def _slack_api_call(
+        self,
+        endpoint: str,
+        params: dict | None = None,
+        method: str = "GET",
+        body: dict | None = None,
+    ) -> dict[str, Any]:
         base_url = f"{self.config.slack_api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         url = f"{base_url}?{urlencode(params or {})}" if params else base_url
         payload = {
@@ -117,8 +126,9 @@ class SlackBrowserClient:
             )
 
         result = self._with_page(self._slack_client_home(), action)
+        result = cast(dict[str, Any], result)
         status = result.get("status")
-        data = result.get("data") or {}
+        data = cast(dict[str, Any], result.get("data") or {})
 
         if status and status >= 400:
             error = data.get("error") if isinstance(data, dict) else "unknown_error"
@@ -178,11 +188,11 @@ class SlackBrowserClient:
     def update_channel_topic(self, channel_id: str, topic: str) -> None:
         self._slack_api_call("conversations.setTopic", method="POST", body={"channel": channel_id, "topic": topic})
 
-    def get_channel_info(self, channel_id: str) -> dict:
+    def get_channel_info(self, channel_id: str) -> dict[str, Any]:
         data = self._slack_api_call("conversations.info", params={"channel": channel_id})
-        return data.get("channel", {})
+        return cast(dict[str, Any], data.get("channel", {}))
 
-    def auth_test(self) -> dict:
+    def auth_test(self) -> dict[str, Any]:
         return self._slack_api_call("auth.test")
 
 

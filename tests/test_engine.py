@@ -47,7 +47,11 @@ class EngineDryRunTests(unittest.TestCase):
     def test_run_sync_dry_run(self):
         config = {
             "settings": {
-                "slack": {"token_env": "SLACK_BOT_TOKEN", "base_url": "https://slack.com/api", "default_channel_id": ""},
+                "slack": {
+                    "token_env": "SLACK_BOT_TOKEN",
+                    "base_url": "https://slack.com/api",
+                    "default_channel_id": "",
+                },
                 "notion": {"token_env": "NOTION_API_KEY", "version": "2022-06-28"},
                 "audit": {"enabled": False},
                 "validate_config_on_startup": False,

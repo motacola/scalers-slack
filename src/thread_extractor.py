@@ -1,11 +1,23 @@
 from collections import defaultdict
 from datetime import datetime, timezone
+from typing import Any, Protocol
 
-from .slack_client import SlackClient
+
+class SlackClientProtocol(Protocol):
+    def fetch_channel_history_paginated(
+        self,
+        channel_id: str,
+        latest: str | None = None,
+        oldest: str | None = None,
+        limit: int = 200,
+        max_pages: int = 10,
+    ) -> list[dict[str, Any]]: ...
+
+    def search_messages_paginated(self, query: str, count: int = 100, max_pages: int = 5) -> list[dict[str, Any]]: ...
 
 
 class ThreadExtractor:
-    def __init__(self, slack_client: SlackClient):
+    def __init__(self, slack_client: SlackClientProtocol):
         self.slack_client = slack_client
 
     def search_threads(

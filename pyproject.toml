@@ -1,0 +1,36 @@
+[project]
+name = "scalers-slack"
+version = "0.1.0"
+description = "Slack + Notion automation for Scalers"
+requires-python = ">=3.11"
+dependencies = [
+  "requests>=2.32.0",
+  "jsonschema>=4.22.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "requests-mock>=1.12.1",
+  "ruff>=0.6.0",
+  "mypy>=1.10.0",
+  "types-requests>=2.32.0.20240712",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true

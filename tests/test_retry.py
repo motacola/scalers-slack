@@ -3,8 +3,8 @@ from unittest import mock
 
 import requests
 
-from src.slack_client import SlackClient
 from src.notion_client import NotionClient
+from src.slack_client import SlackClient
 
 
 class FakeResponse:

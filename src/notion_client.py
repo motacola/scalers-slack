@@ -1,6 +1,8 @@
 import os
 import random
 import time
+from typing import Any, cast
+
 import requests
 
 
@@ -16,6 +18,13 @@ class NotionClient:
         self.version = version
         self.base_url = "https://api.notion.com/v1"
         self.timeout = timeout
+        self.retry_max_attempts: int = 5
+        self.retry_backoff_base: float = 0.5
+        self.retry_backoff_max: float = 8.0
+        self.retry_jitter: float = 0.25
+        self.retry_on_status: set[int] = {408, 429, 500, 502, 503, 504}
+        self.retry_on_network_error: bool = True
+        self.retry_non_idempotent: bool = False
         self._configure_retries(retry_config or {})
 
     def _configure_retries(self, config: dict) -> None:
@@ -28,22 +37,30 @@ class NotionClient:
         self.retry_non_idempotent = bool(config.get("retry_non_idempotent", False))
 
     def _compute_backoff(self, attempt: int, retry_after: float | None = None) -> float:
-        base = min(self.retry_backoff_max, self.retry_backoff_base * (2 ** max(attempt - 1, 0)))
+        base = float(min(self.retry_backoff_max, self.retry_backoff_base * (2 ** max(attempt - 1, 0))))
         if retry_after is not None:
-            base = max(base, retry_after)
-        jitter = random.uniform(0, self.retry_jitter) if self.retry_jitter > 0 else 0.0
-        return base + jitter
+            base = float(max(base, retry_after))
+        jitter = float(random.uniform(0, self.retry_jitter)) if self.retry_jitter > 0 else 0.0
+        return float(base + jitter)
 
     def _parse_retry_after(self, response: requests.Response) -> float | None:
-        retry_after = response.headers.get("Retry-After")
-        if not retry_after:
+        headers = cast(dict[str, str], response.headers)
+        retry_after = headers.get("Retry-After")
+        if retry_after is None:
             return None
         try:
-            return max(0.0, float(retry_after))
-        except ValueError:
+            value = float(retry_after)
+        except (TypeError, ValueError):
             return None
+        return max(0.0, value)
 
-    def _request(self, method: str, path: str, json_body: dict | None = None, idempotent: bool = True) -> dict:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        json_body: dict | None = None,
+        idempotent: bool = True,
+    ) -> dict[str, Any]:
         if not self.token:
             raise RuntimeError("NOTION_API_KEY is not set")
 
@@ -89,7 +106,7 @@ class NotionClient:
                 raise RuntimeError(f"Notion API error: {response.status_code} {response.text}")
 
             try:
-                return response.json()
+                return cast(dict[str, Any], response.json())
             except ValueError as exc:
                 last_error = exc
                 if attempt >= self.retry_max_attempts:
@@ -119,7 +136,7 @@ class NotionClient:
         results = data.get("results", [])
         if not results:
             raise RuntimeError("Notion did not return a block for the audit note")
-        return results[0]["id"]
+        return cast(str, results[0]["id"])
 
     def get_block(self, block_id: str) -> dict:
         return self._request("GET", f"blocks/{block_id}")
