@@ -182,6 +182,9 @@ class SlackBrowserClient:
         data = self._slack_api_call("conversations.info", params={"channel": channel_id})
         return data.get("channel", {})
 
+    def auth_test(self) -> dict:
+        return self._slack_api_call("auth.test")
+
 
 class NotionBrowserClient:
     supports_verification = False
@@ -247,3 +250,19 @@ class NotionBrowserClient:
 
     def get_page(self, page_id: str) -> dict:
         return {}
+
+    def check_page_access(self, page_id: str) -> bool:
+        url = self._page_url(page_id)
+
+        def action(page):
+            page.wait_for_timeout(1500)
+            current_url = page.url or ""
+            if "login" in current_url or "signup" in current_url:
+                return False
+            try:
+                page.wait_for_selector("div[role='main']", timeout=10000)
+            except Exception:
+                return False
+            return True
+
+        return bool(self._with_page(url, action))

@@ -51,6 +51,7 @@ falls back to `audit/audit.jsonl` so you always have a record of what ran and wh
 ## Configuration
 Edit `config.json` to set channels and Notion pages. The `audit` settings control storage paths.
 Use `settings.slack.pagination` for defaults and `projects[].slack_pagination` to cap page counts per channel.
+High-traffic channels can be tightened further (some presets are already applied in `config.json`).
 
 ### Browser Automation Fallback
 If API keys are not available, enable the browser fallback in `config.json`:
@@ -65,6 +66,11 @@ If API keys are not available, enable the browser fallback in `config.json`:
 Create a storage state file by logging into Slack/Notion in an automated browser session:
 ```bash
 python -m playwright codegen --save-storage browser_storage_state.json https://app.slack.com/client/TBLCQAFEG
+```
+
+Run a quick health check:
+```bash
+python scripts/browser_health_check.py --config config.json
 ```
 
 Notes:
