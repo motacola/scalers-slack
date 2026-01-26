@@ -9,6 +9,7 @@ from src.engine import ScalersSlackEngine
 class StubAuditLogger:
     def __init__(self):
         self.records = []
+        self.run_ids = set()
 
     def log(self, action, status, details=None, error=None):
         self.records.append({"action": action, "status": status, "details": details, "error": error})
@@ -18,6 +19,13 @@ class StubAuditLogger:
 
     def log_review(self, action, details=None, error=None):
         self.log(action, "review", details=details, error=error)
+
+    def has_run_id(self, run_id):
+        return run_id in self.run_ids
+
+    def record_run_id(self, run_id, project, status="completed", details=None):
+        self.run_ids.add(run_id)
+        self.log("run_registry", status, details={"run_id": run_id, "project": project})
 
 
 class StubThreadExtractor:

@@ -52,6 +52,9 @@ falls back to `audit/audit.jsonl` so you always have a record of what ran and wh
 Edit `config.json` to set channels and Notion pages. The `audit` settings control storage paths.
 Use `settings.slack.pagination` for defaults and `projects[].slack_pagination` to cap page counts per channel.
 High-traffic channels can be tightened further (some presets are already applied in `config.json`).
+Use `settings.slack.retries` / `settings.notion.retries` to adjust retry behavior and rate-limit handling.
+
+The sync run uses a deterministic Run ID (based on project, since/query, and date) to avoid duplicate Notion writes.
 
 ### Browser Automation Fallback
 If API keys are not available, enable the browser fallback in `config.json`:

@@ -9,7 +9,7 @@ from .config_loader import load_config, get_project
 from .notion_client import NotionClient
 from .slack_client import SlackClient
 from .thread_extractor import ThreadExtractor
-from .utils import iso_to_unix_ts, utc_now_iso
+from .utils import iso_to_unix_ts, utc_now_iso, make_run_id
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -54,6 +54,10 @@ class ScalersSlackEngine:
         )
         slack_token = os.getenv(slack_settings.get("token_env", "SLACK_BOT_TOKEN"))
         notion_token = os.getenv(notion_settings.get("token_env", "NOTION_API_KEY"))
+        slack_timeout = _coerce_int(slack_settings.get("timeout_seconds"), 30)
+        notion_timeout = _coerce_int(notion_settings.get("timeout_seconds"), 30)
+        slack_retries = slack_settings.get("retries", {})
+        notion_retries = notion_settings.get("retries", {})
 
         needs_browser = browser_config.enabled and (not slack_token or not notion_token)
         self.browser_enabled = needs_browser
@@ -70,20 +74,40 @@ class ScalersSlackEngine:
         if slack_client:
             self.slack = slack_client
         elif slack_token:
-            self.slack = SlackClient(token=slack_token, base_url=slack_settings["base_url"])
+            self.slack = SlackClient(
+                token=slack_token,
+                base_url=slack_settings["base_url"],
+                timeout=slack_timeout,
+                retry_config=slack_retries,
+            )
         elif self.browser_session:
             self.slack = SlackBrowserClient(self.browser_session, browser_config)
         else:
-            self.slack = SlackClient(token=slack_token, base_url=slack_settings["base_url"])
+            self.slack = SlackClient(
+                token=slack_token,
+                base_url=slack_settings["base_url"],
+                timeout=slack_timeout,
+                retry_config=slack_retries,
+            )
 
         if notion_client:
             self.notion = notion_client
         elif notion_token:
-            self.notion = NotionClient(token=notion_token, version=notion_settings["version"])
+            self.notion = NotionClient(
+                token=notion_token,
+                version=notion_settings["version"],
+                timeout=notion_timeout,
+                retry_config=notion_retries,
+            )
         elif self.browser_session:
             self.notion = NotionBrowserClient(self.browser_session, browser_config)
         else:
-            self.notion = NotionClient(token=notion_token, version=notion_settings["version"])
+            self.notion = NotionClient(
+                token=notion_token,
+                version=notion_settings["version"],
+                timeout=notion_timeout,
+                retry_config=notion_retries,
+            )
         self.audit = audit_logger or AuditLogger(
             enabled=audit_settings.get("enabled", True),
             storage_dir=audit_settings.get("storage_dir", "audit"),
@@ -114,9 +138,15 @@ class ScalersSlackEngine:
 
         oldest = iso_to_unix_ts(since) if since else None
         sync_timestamp = utc_now_iso()
+        run_date = sync_timestamp.split("T")[0]
+        run_id = make_run_id(project_name, since, query, run_date)
 
         action = "slack_sync"
-        self.audit.log(action, "started", {"project": project_name, "since": since, "query": query})
+        self.audit.log(action, "started", {"project": project_name, "since": since, "query": query, "run_id": run_id})
+
+        skip_notion = self.audit.has_run_id(run_id)
+        if skip_notion:
+            self.audit.log(action, "run_id_exists", {"project": project_name, "run_id": run_id})
 
         threads = []
         try:
@@ -145,23 +175,44 @@ class ScalersSlackEngine:
             self.audit.log(action, "dry_run", {"count": len(threads), "project": project_name})
             return
 
-        audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
-        if audit_note_page:
-            note_text = self._build_audit_note(project_name, sync_timestamp, threads)
-            self._write_notion_audit_note(note_text, audit_note_page)
+        notion_written = False
+        if not skip_notion:
+            audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
+            if audit_note_page:
+                note_text = self._build_audit_note(project_name, sync_timestamp, threads, run_id, channel_id)
+                self._write_notion_audit_note(note_text, audit_note_page)
+                notion_written = True
 
-        last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get("notion_last_synced_page_id")
-        if last_synced_page:
-            property_name = self.audit_settings.get("notion_last_synced_property", "Last Synced")
-            self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp)
+            last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get("notion_last_synced_page_id")
+            if last_synced_page:
+                property_name = self.audit_settings.get("notion_last_synced_property", "Last Synced")
+                self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp)
+                notion_written = True
+
+            if notion_written:
+                self.audit.record_run_id(
+                    run_id,
+                    project_name,
+                    status="notion_written",
+                    details={"since": since, "query": query},
+                )
 
         self._update_slack_last_synced(channel_id, sync_timestamp)
-        self.audit.log(action, "completed", {"project": project_name, "threads": len(threads)})
+        self.audit.log(action, "completed", {"project": project_name, "threads": len(threads), "run_id": run_id})
 
-    def _build_audit_note(self, project_name: str, sync_timestamp: str, threads: list[dict]) -> str:
+    def _build_audit_note(
+        self,
+        project_name: str,
+        sync_timestamp: str,
+        threads: list[dict],
+        run_id: str,
+        channel_id: str,
+    ) -> str:
         sample = ", ".join([t["thread_ts"] for t in threads[:5]])
         sample_text = sample if sample else "No threads collected"
         return (
+            f"Run ID: {run_id}\n"
+            f"Channel: {channel_id}\n"
             f"Sync completed for {project_name} at {sync_timestamp}. "
             f"Threads collected: {len(threads)}. Sample thread_ts: {sample_text}."
         )

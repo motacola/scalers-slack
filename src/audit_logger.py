@@ -44,6 +44,16 @@ class AuditLogger:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS run_registry (
+                    run_id TEXT PRIMARY KEY,
+                    project TEXT,
+                    created_at TEXT NOT NULL,
+                    status TEXT
+                )
+                """
+            )
             connection.commit()
         self._db_initialized = True
 
@@ -85,9 +95,67 @@ class AuditLogger:
     def log_failure(self, action: str, details: dict | None = None, error: str | None = None) -> None:
         self.log(action=action, status="failed", details=details, error=error)
 
+    def has_run_id(self, run_id: str) -> bool:
+        if not self.enabled:
+            return False
+
+        if self._db_initialized:
+            try:
+                with sqlite3.connect(self.sqlite_path) as connection:
+                    row = connection.execute(
+                        "SELECT 1 FROM run_registry WHERE run_id = ? LIMIT 1", (run_id,)
+                    ).fetchone()
+                return row is not None
+            except sqlite3.Error:
+                self._db_initialized = False
+
+        return self._run_id_in_jsonl(run_id)
+
+    def record_run_id(self, run_id: str, project: str, status: str = "completed", details: dict | None = None) -> None:
+        if not self.enabled:
+            return
+
+        payload = {"run_id": run_id, "project": project, "status": status}
+        if details:
+            payload.update(details)
+
+        if self._db_initialized:
+            try:
+                with sqlite3.connect(self.sqlite_path) as connection:
+                    connection.execute(
+                        "INSERT OR IGNORE INTO run_registry (run_id, project, created_at, status) VALUES (?, ?, ?, ?)",
+                        (run_id, project, _utc_now_iso(), status),
+                    )
+                    connection.commit()
+            except sqlite3.Error:
+                self._db_initialized = False
+
+        self.log(action="run_registry", status=status, details=payload)
+
     def _write_jsonl(self, record: dict) -> None:
         directory = os.path.dirname(self.jsonl_path)
         if directory:
             os.makedirs(directory, exist_ok=True)
         with open(self.jsonl_path, "a") as handle:
             handle.write(json.dumps(record, ensure_ascii=True) + "\n")
+
+    def _run_id_in_jsonl(self, run_id: str) -> bool:
+        if not os.path.exists(self.jsonl_path):
+            return False
+
+        try:
+            with open(self.jsonl_path, "r") as handle:
+                for line in handle:
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if record.get("action") != "run_registry":
+                        continue
+                    details = record.get("details", {})
+                    if isinstance(details, dict) and details.get("run_id") == run_id:
+                        return True
+        except OSError:
+            return False
+
+        return False
