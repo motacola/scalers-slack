@@ -2,6 +2,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from .models import Thread
+
 
 class SlackClientProtocol(Protocol):
     def fetch_channel_history_paginated(
@@ -26,7 +28,7 @@ class ThreadExtractor:
         channel_id: str | None = None,
         limit: int = 100,
         max_pages: int = 5,
-    ) -> list[dict]:
+    ) -> list[Thread]:
         matches = self.slack_client.search_messages_paginated(query=query, count=limit, max_pages=max_pages)
         threads = defaultdict(list)
 
@@ -47,7 +49,7 @@ class ThreadExtractor:
         latest: str | None = None,
         limit: int = 200,
         max_pages: int = 10,
-    ) -> list[dict]:
+    ) -> list[Thread]:
         messages = self.slack_client.fetch_channel_history_paginated(
             channel_id=channel_id,
             oldest=oldest,
@@ -65,15 +67,17 @@ class ThreadExtractor:
 
         return [self._summarize_thread(thread_ts, items, channel_id=channel_id) for thread_ts, items in threads.items()]
 
-    def _summarize_thread(self, thread_ts: str, items: list[dict], channel_id: str | None = None) -> dict:
+    def _summarize_thread(self, thread_ts: str, items: list[dict], channel_id: str | None = None) -> Thread:
         if not items:
-            return {
-                "thread_ts": thread_ts,
-                "channel_id": channel_id,
-                "message_count": 0,
-                "text_preview": "",
-                "created_at": None,
-            }
+            return Thread(
+                thread_ts=thread_ts,
+                channel_id=channel_id,
+                message_count=0,
+                text="",
+                created_at=None,
+                reply_count=None,
+                permalink=None,
+            )
         first = items[0]
         created_at = None
         try:
@@ -82,10 +86,16 @@ class ThreadExtractor:
         except (TypeError, ValueError):
             created_at = None
         channel = first.get("channel", {}).get("id") or first.get("channel_id") or channel_id
-        return {
-            "thread_ts": thread_ts,
-            "channel_id": channel,
-            "message_count": len(items),
-            "text_preview": (first.get("text") or "")[:120],
-            "created_at": created_at,
-        }
+        reply_count = first.get("reply_count")
+        if reply_count is None and len(items) > 1:
+            reply_count = max(len(items) - 1, 0)
+
+        return Thread(
+            thread_ts=thread_ts,
+            channel_id=channel,
+            message_count=len(items),
+            text=first.get("text") or "",
+            created_at=created_at,
+            reply_count=reply_count,
+            permalink=first.get("permalink"),
+        )

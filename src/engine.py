@@ -9,6 +9,7 @@ from .browser_automation import BrowserAutomationConfig, BrowserSession, NotionB
 from .config_loader import get_project, load_config
 from .config_validation import validate_or_raise
 from .logging_utils import configure_logging, log_event
+from .models import Thread
 from .notion_client import NotionClient
 from .slack_client import SlackClient
 from .thread_extractor import ThreadExtractor
@@ -262,6 +263,7 @@ class ScalersSlackEngine:
                 run_id=run_id,
                 method=slack_method,
                 thread_count=len(threads),
+                sample_threads=[thread.thread_ts for thread in threads[:3]],
                 duration_ms=slack_duration_ms,
                 pagination=pagination_stats,
                 slack_stats=slack_stats,
@@ -351,18 +353,30 @@ class ScalersSlackEngine:
         self,
         project_name: str,
         sync_timestamp: str,
-        threads: list[dict],
+        threads: list[Thread],
         run_id: str,
         channel_id: str,
     ) -> str:
-        sample = ", ".join([t["thread_ts"] for t in threads[:5]])
-        sample_text = sample if sample else "No threads collected"
-        return (
-            f"Run ID: {run_id}\n"
-            f"Channel: {channel_id}\n"
-            f"Sync completed for {project_name} at {sync_timestamp}. "
-            f"Threads collected: {len(threads)}. Sample thread_ts: {sample_text}."
-        )
+        channel_name = self._get_channel_name(channel_id)
+        header = [
+            f"Run ID: {run_id}",
+            f"Channel: {channel_name or channel_id}",
+            f"Sync completed for {project_name} at {sync_timestamp}.",
+            f"Threads collected: {len(threads)}.",
+        ]
+
+        lines = []
+        for thread in threads[:5]:
+            preview = thread.preview(100).replace("\\n", " ")
+            line = f"- {thread.created_at or 'unknown'} | {preview}"
+            if thread.permalink:
+                line += f" | {thread.permalink}"
+            lines.append(line)
+
+        if not lines:
+            lines.append("- No threads collected")
+
+        return "\\n".join(header + ["Top threads:"] + lines)
 
     def _write_notion_audit_note(self, note_text: str, page_id: str, run_id: str) -> None:
         action = "notion_audit_note"
@@ -543,6 +557,13 @@ class ScalersSlackEngine:
         except Exception as exc:
             self.audit.log_failure(action, {"channel_id": channel_id}, error=str(exc))
             raise
+
+    def _get_channel_name(self, channel_id: str) -> str | None:
+        try:
+            info = self.slack.get_channel_info(channel_id)
+        except Exception:
+            return None
+        return info.get("name") or info.get("name_normalized")
 
     def _get_client_stats(self, client: object) -> dict[str, Any]:
         if hasattr(client, "get_stats"):

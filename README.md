@@ -69,6 +69,7 @@ Configure via:
 ```json
 \"logging\": { \"json\": true, \"level\": \"INFO\" }
 ```
+Thread summaries now include timestamps, preview text, and permalinks (when available).
 
 Feature toggles:
 ```json

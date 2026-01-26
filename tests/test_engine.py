@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from src.engine import ScalersSlackEngine
+from src.models import Thread
 
 
 class StubAuditLogger:
@@ -67,13 +68,15 @@ class EngineDryRunTests(unittest.TestCase):
         }
 
         threads = [
-            {
-                "thread_ts": "1704067200.000000",
-                "channel_id": "C123",
-                "message_count": 1,
-                "text_preview": "hello",
-                "created_at": "2024-01-01T00:00:00+00:00",
-            }
+            Thread(
+                thread_ts="1704067200.000000",
+                channel_id="C123",
+                message_count=1,
+                text="hello",
+                created_at="2024-01-01T00:00:00+00:00",
+                reply_count=0,
+                permalink=None,
+            )
         ]
 
         with tempfile.TemporaryDirectory() as tmpdir:
