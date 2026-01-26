@@ -185,7 +185,7 @@ class SlackBrowserClient:
 
 class NotionBrowserClient:
     supports_verification = False
-    supports_last_synced_update = False
+    supports_last_synced_update = True
 
     def __init__(self, session: BrowserSession, config: BrowserAutomationConfig):
         self.session = session
@@ -219,7 +219,31 @@ class NotionBrowserClient:
         return {}
 
     def update_page_property(self, page_id: str, property_name: str, date_iso: str) -> None:
-        raise RuntimeError("Notion browser fallback does not support updating properties yet")
+        url = self._page_url(page_id)
+        date_value = date_iso.split("T")[0] if date_iso else ""
+
+        def action(page):
+            page.wait_for_timeout(1500)
+            label = page.get_by_text(property_name, exact=True)
+            label.wait_for(timeout=10000)
+
+            row = label.locator(
+                "xpath=ancestor::div[@role='row' or @role='listitem' or @data-property-id][1]"
+            )
+            if row.count() == 0:
+                row = label.locator("xpath=..")
+
+            value_cell = row.locator(
+                "css=div[contenteditable='true'], css=div[role='button'], css=div[role='textbox']"
+            ).first
+            value_cell.click()
+            page.keyboard.press("Control+A")
+            page.keyboard.press("Meta+A")
+            if date_value:
+                page.keyboard.type(date_value)
+            page.keyboard.press("Enter")
+
+        self._with_page(url, action)
 
     def get_page(self, page_id: str) -> dict:
         return {}

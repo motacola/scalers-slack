@@ -176,6 +176,9 @@ class ScalersSlackEngine:
                     error="Browser fallback used; verify audit note manually",
                 )
         except Exception as exc:
+            if isinstance(self.notion, NotionBrowserClient):
+                self.audit.log_review(action, {"page_id": page_id}, error=str(exc))
+                return
             self.audit.log_failure(action, {"page_id": page_id}, error=str(exc))
             raise
 
@@ -210,6 +213,9 @@ class ScalersSlackEngine:
                 return
             self.audit.log(action, "completed", {"page_id": page_id, "value": sync_timestamp})
         except Exception as exc:
+            if isinstance(self.notion, NotionBrowserClient):
+                self.audit.log_review(action, {"page_id": page_id}, error=str(exc))
+                return
             self.audit.log_failure(action, {"page_id": page_id}, error=str(exc))
             raise
 

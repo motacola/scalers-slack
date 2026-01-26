@@ -69,7 +69,7 @@ python -m playwright codegen --save-storage browser_storage_state.json https://a
 
 Notes:
 - Slack browser fallback uses your logged-in session cookies to call Slack Web API endpoints.
-- Notion browser fallback currently appends audit notes only; Last Synced updates will be logged for manual review.
+- Notion browser fallback attempts to set the date property by UI automation; verify the update if the UI changes.
 
 ## Notes
 - The Slack and Notion APIs require their respective permissions.
