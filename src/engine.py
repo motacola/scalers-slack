@@ -25,11 +25,21 @@ def _coerce_int(value: object, default: int) -> int:
         return default
 
 
+def _coerce_bool(value: object, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    return bool(value)
+
+
 def _effective_feature(feature_settings: dict, project: dict, key: str) -> bool:
     project_value = project.get(key)
     if project_value is None:
-        return bool(feature_settings.get(key, True))
-    return bool(project_value)
+        return _coerce_bool(feature_settings.get(key), True)
+    return _coerce_bool(project_value, True)
 
 
 class ScalersSlackEngine:
@@ -163,6 +173,8 @@ class ScalersSlackEngine:
         previous_audit_enabled = self.audit.enabled
         if previous_audit_enabled != enable_audit:
             self.audit.enabled = enable_audit
+            if enable_audit:
+                self.audit.ensure_initialized()
 
         action = "slack_sync"
         try:

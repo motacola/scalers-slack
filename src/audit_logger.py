@@ -19,8 +19,17 @@ class AuditLogger:
         if not self.enabled:
             return
 
+        self.ensure_initialized()
+
+    def ensure_initialized(self) -> None:
+        if not self.enabled:
+            return
+
         if self.storage_dir:
             os.makedirs(self.storage_dir, exist_ok=True)
+
+        if self._db_initialized:
+            return
 
         try:
             self._init_db()
