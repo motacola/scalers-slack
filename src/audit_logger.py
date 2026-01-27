@@ -63,6 +63,16 @@ class AuditLogger:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    real_name TEXT,
+                    display_name TEXT,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             connection.commit()
         self._db_initialized = True
 
@@ -168,3 +178,29 @@ class AuditLogger:
             return False
 
         return False
+    def get_user_name(self, user_id: str) -> str | None:
+        if not self.enabled or not self._db_initialized:
+            return None
+        try:
+            with sqlite3.connect(self.sqlite_path) as connection:
+                row = connection.execute(
+                    "SELECT real_name, display_name FROM users WHERE user_id = ? LIMIT 1", (user_id,)
+                ).fetchone()
+            if row:
+                return row[0] or row[1]
+        except sqlite3.Error:
+            self._db_initialized = False
+        return None
+
+    def set_user_name(self, user_id: str, real_name: str, display_name: str) -> None:
+        if not self.enabled or not self._db_initialized:
+            return
+        try:
+            with sqlite3.connect(self.sqlite_path) as connection:
+                connection.execute(
+                    "INSERT OR REPLACE INTO users (user_id, real_name, display_name, updated_at) VALUES (?, ?, ?, ?)",
+                    (user_id, real_name, display_name, _utc_now_iso()),
+                )
+                connection.commit()
+        except sqlite3.Error:
+            self._db_initialized = False

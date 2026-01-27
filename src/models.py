@@ -11,6 +11,7 @@ class Thread:
     created_at: Optional[str]
     text: str
     message_count: int
+    user_id: Optional[str] = None
     reply_count: Optional[int] = None
     permalink: Optional[str] = None
 

@@ -201,6 +201,10 @@ class SlackBrowserClient:
         data = self._slack_api_call("conversations.info", params={"channel": channel_id})
         return cast(dict[str, Any], data.get("channel", {}))
 
+    def get_user_info(self, user_id: str) -> dict[str, Any]:
+        data = self._slack_api_call("users.info", params={"user": user_id})
+        return cast(dict[str, Any], data.get("user", {}))
+
     def auth_test(self) -> dict[str, Any]:
         return self._slack_api_call("auth.test")
 

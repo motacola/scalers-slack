@@ -168,6 +168,18 @@ class NotionClient:
     def get_page(self, page_id: str) -> dict:
         return self._request("GET", f"pages/{page_id}")
 
+    def query_database(self, database_id: str, filter: dict | None = None) -> list[dict]:
+        payload = {}
+        if filter:
+            payload["filter"] = filter
+        data = self._request("POST", f"databases/{database_id}/query", json_body=payload, idempotent=True)
+        return cast(list[dict], data.get("results", []))
+
+    def search_pages(self, query: str) -> list[dict]:
+        payload = {"query": query, "filter": {"value": "page", "property": "object"}}
+        data = self._request("POST", "search", json_body=payload, idempotent=True)
+        return cast(list[dict], data.get("results", []))
+
     def reset_stats(self) -> None:
         self.stats = {
             "api_calls": 0,

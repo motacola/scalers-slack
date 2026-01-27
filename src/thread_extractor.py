@@ -59,11 +59,11 @@ class ThreadExtractor:
         )
         threads = defaultdict(list)
         for message in messages:
-            if message.get("thread_ts") or message.get("reply_count"):
-                thread_ts = message.get("thread_ts") or message.get("ts")
-                if not thread_ts:
-                    continue
-                threads[thread_ts].append(message)
+            thread_ts = message.get("thread_ts") or message.get("ts")
+            if not thread_ts:
+                continue
+            threads[thread_ts].append(message)
+
 
         return [self._summarize_thread(thread_ts, items, channel_id=channel_id) for thread_ts, items in threads.items()]
 
@@ -93,9 +93,11 @@ class ThreadExtractor:
         return Thread(
             thread_ts=thread_ts,
             channel_id=channel,
+            user_id=first.get("user"),
             message_count=len(items),
             text=first.get("text") or "",
             created_at=created_at,
             reply_count=reply_count,
             permalink=first.get("permalink"),
         )
+

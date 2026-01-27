@@ -55,10 +55,12 @@
       "jsonl_path": "audit/audit.jsonl",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_tickets_database_id": "28e1c9f5b34f8032b704d33fa9cb9e6c",
+      "notion_builds_database_id": "28e1c9f5b34f80128b7bf4dc029722f6",
       "notion_last_synced_property": "Last Synced"
     },
     "browser_automation": {
-      "enabled": false,
+      "enabled": true,
       "storage_state_path": "browser_storage_state.json",
       "headless": true,
       "slow_mo_ms": 0,
@@ -567,6 +569,7 @@
       "slack_channel_id": "C0AAGQBLU4D",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/b6fcb2a957194ab6a57c2c92de5fe25d",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,
@@ -795,6 +798,7 @@
       "slack_channel_id": "C08U583HP33",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/2ca1c9f5b34f8054a1f8d08a033972b0",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,
@@ -879,6 +883,7 @@
       "slack_channel_id": "C09FLK3LFNY",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/Kinty-Jones-Website-Management-1ab1c9f5b34f80cdb5a9f2f9f7669838",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,
@@ -915,6 +920,7 @@
       "slack_channel_id": "C0A3LP20J5C",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/Lake-County-Mechanical-Website-Management-2ca1c9f5b34f806aa775cea4bc4ef6a6",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,
@@ -927,6 +933,7 @@
       "slack_channel_id": "C084GCQL2BS",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/Leo-Kob-Co-Website-Management-2381c9f5b34f807fadbcd50c1628e037",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,
@@ -939,6 +946,7 @@
       "slack_channel_id": "C087YRRTUP5",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/2e71c9f5b34f80e3a918e2b15b62300f",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,
@@ -999,6 +1007,7 @@
       "slack_channel_id": "C096BAE8UKE",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/2ea1c9f5b34f80a1abaecdca512d9258",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,
@@ -1155,6 +1164,7 @@
       "slack_channel_id": "C08FS4SQDUM",
       "notion_audit_page_id": "",
       "notion_last_synced_page_id": "",
+      "notion_page_url": "https://www.notion.so/quickerleads/Performance-Of-Maine-Website-Management-1ab1c9f5b34f8036b0cbfad3ac5dcd7a",
       "slack_pagination": {
         "history_limit": 200,
         "history_max_pages": 3,

@@ -1,7 +1,9 @@
 import argparse
 import logging
 import os
+import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 from .audit_logger import AuditLogger
@@ -13,6 +15,8 @@ from .models import Thread
 from .notion_client import NotionClient
 from .slack_client import SlackClient
 from .thread_extractor import ThreadExtractor
+from .summarizer import ActivitySummarizer
+from .ticket_manager import TicketManager
 from .utils import iso_to_unix_ts, make_run_id, utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -171,15 +175,7 @@ class ScalersSlackEngine:
         if not channel_id:
             raise RuntimeError("Slack channel ID is required in config.json")
 
-        pagination_defaults = self.slack_settings.get("pagination", {})
-        pagination_overrides = project.get("slack_pagination") or {}
-        pagination = {**pagination_defaults, **pagination_overrides}
-        history_limit = _coerce_int(pagination.get("history_limit"), 200)
-        history_max_pages = _coerce_int(pagination.get("history_max_pages"), 5)
-        search_limit = _coerce_int(pagination.get("search_limit"), 100)
-        search_max_pages = _coerce_int(pagination.get("search_max_pages"), 3)
-
-        oldest = iso_to_unix_ts(since) if since else None
+        # Pagination and time window are handled in collect_activity based on config.
         sync_timestamp = utc_now_iso()
         run_date = sync_timestamp.split("T")[0]
         run_id = make_run_id(project_name, since, query, run_date)
@@ -226,27 +222,10 @@ class ScalersSlackEngine:
                     json_enabled=self.json_logging,
                 )
 
-            threads = []
+            slack_method = "search" if query else "history"
+            slack_start = time.monotonic()
             try:
-                if hasattr(self.slack, "reset_stats"):
-                    self.slack.reset_stats()
-                slack_start = time.monotonic()
-                if query:
-                    threads = self.thread_extractor.search_threads(
-                        query=query,
-                        channel_id=channel_id,
-                        limit=search_limit,
-                        max_pages=search_max_pages,
-                    )
-                    slack_method = "search"
-                else:
-                    threads = self.thread_extractor.fetch_channel_threads(
-                        channel_id=channel_id,
-                        oldest=oldest,
-                        limit=history_limit,
-                        max_pages=history_max_pages,
-                    )
-                    slack_method = "history"
+                threads = self.collect_activity(project_name, since, query)
             except Exception as exc:
                 self.audit.log_failure(action, {"project": project_name}, error=str(exc))
                 raise
@@ -367,8 +346,9 @@ class ScalersSlackEngine:
 
         lines = []
         for thread in threads[:5]:
-            preview = thread.preview(100).replace("\\n", " ")
-            line = f"- {thread.created_at or 'unknown'} | {preview}"
+            preview = thread.preview(100).replace("\n", " ")
+            user_name = self._resolve_user_name(thread.user_id) if thread.user_id else "unknown"
+            line = f"- {thread.created_at or 'unknown'} | {user_name} | {preview}"
             if thread.permalink:
                 line += f" | {thread.permalink}"
             lines.append(line)
@@ -376,7 +356,7 @@ class ScalersSlackEngine:
         if not lines:
             lines.append("- No threads collected")
 
-        return "\\n".join(header + ["Top threads:"] + lines)
+        return "\n".join(header + ["Top threads:"] + lines)
 
     def _write_notion_audit_note(self, note_text: str, page_id: str, run_id: str) -> None:
         action = "notion_audit_note"
@@ -575,6 +555,121 @@ class ScalersSlackEngine:
             return cast(dict[str, Any], client.get_pagination_stats())
         return {}
 
+    def _resolve_user_name(self, user_id: str) -> str:
+        if not user_id:
+            return "unknown"
+        cached = self.audit.get_user_name(user_id)
+        if cached:
+            return cached
+        try:
+            user = self.slack.get_user_info(user_id)
+            real_name = user.get("real_name", "")
+            display_name = user.get("name", "")
+            self.audit.set_user_name(user_id, real_name, display_name)
+            return real_name or display_name or user_id
+        except Exception:
+            return user_id
+
+    def run_summarize(self, since: str | None = None, concurrency: int = 5) -> str:
+        projects = self.config.get("projects", [])
+        project_names = [p["name"] for p in projects]
+        activity_map: dict[str, list[Thread]] = {}
+
+        def fetch_one(p_name: str) -> tuple[str, list[Thread]]:
+            try:
+                return p_name, self.collect_activity(project_name=p_name, since=since)
+            except Exception:
+                return p_name, []
+
+        if concurrency > 1 and len(project_names) > 1:
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                results = executor.map(fetch_one, project_names)
+                for name, threads in results:
+                    if threads:
+                        activity_map[name] = threads
+        else:
+            for name in project_names:
+                project_name, threads = fetch_one(name)
+                if threads:
+                    activity_map[project_name] = threads
+
+        summarizer = ActivitySummarizer(self)
+        return summarizer.synthesize_standup(activity_map)
+
+    def run_ticket_update(self, project_name: str, since: str | None = None) -> str:
+        """
+        Fetches activity for a project, generates a summary,
+        and updates the corresponding Notion ticket.
+        """
+        database_id = os.getenv("NOTION_TICKETS_DATABASE_ID") or self.audit_settings.get("notion_tickets_database_id")
+        builds_db_id = os.getenv("NOTION_BUILDS_DATABASE_ID") or self.audit_settings.get("notion_builds_database_id")
+        
+        database_ids = [db for db in [database_id, builds_db_id] if db]
+        if not database_ids:
+            return "Error: No Notion Database IDs found in ENV or config.json"
+
+        # 1. Collect activity
+        project = get_project(self.config, project_name)
+        if not project:
+            return f"Project '{project_name}' not found in config.json"
+
+        threads = self.collect_activity(project_name, since=since)
+        if not threads:
+            return f"No activity found for {project_name}"
+
+        # 2. Format a concise summary
+        activity_map = {project_name: threads}
+        summarizer = ActivitySummarizer(self)
+        summary_text = summarizer.format_activity(activity_map)
+
+        # 3. Update Notion
+        manager = TicketManager(cast(NotionClient, self.notion))
+        notion_url = project.get("notion_page_url")
+        return manager.update_project_ticket(project_name, summary_text, database_ids, notion_page_id_or_url=notion_url)
+
+
+    def collect_activity(
+        self,
+        project_name: str,
+        since: str | None = None,
+        query: str | None = None,
+    ) -> list[Thread]:
+        project = get_project(self.config, project_name)
+        if not project:
+            return []
+
+        channel_id = project.get("slack_channel_id") or self.slack_settings.get("default_channel_id")
+        if not channel_id:
+            return []
+
+        pagination_defaults = self.slack_settings.get("pagination", {})
+        pagination_overrides = project.get("slack_pagination") or {}
+        pagination = {**pagination_defaults, **pagination_overrides}
+        history_limit = _coerce_int(pagination.get("history_limit"), 200)
+        history_max_pages = _coerce_int(pagination.get("history_max_pages"), 5)
+        search_limit = _coerce_int(pagination.get("search_limit"), 100)
+        search_max_pages = _coerce_int(pagination.get("search_max_pages"), 3)
+
+        oldest = iso_to_unix_ts(since) if since else None
+
+        if hasattr(self.slack, "reset_stats"):
+            self.slack.reset_stats()
+
+        if query:
+            return self.thread_extractor.search_threads(
+                query=query,
+                channel_id=channel_id,
+                limit=search_limit,
+                max_pages=search_max_pages,
+            )
+        else:
+            return self.thread_extractor.fetch_channel_threads(
+                channel_id=channel_id,
+                oldest=oldest,
+                limit=history_limit,
+                max_pages=history_max_pages,
+            )
+
     def close(self) -> None:
         if not self.browser_session:
             return
@@ -588,10 +683,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Scalers Slack Automation")
     parser.add_argument("--config", default="config.json", help="Path to config.json")
     parser.add_argument("--project", help="Project name from config.json")
+    parser.add_argument("--all", action="store_true", help="Sync all projects in config.json")
     parser.add_argument("--since", help="ISO8601 timestamp (e.g. 2024-01-01T00:00:00Z)")
     parser.add_argument("--query", help="Slack search query")
     parser.add_argument("--dry-run", action="store_true", help="Collect threads but skip writes")
     parser.add_argument("--validate-config", action="store_true", help="Validate config and exit")
+    parser.add_argument("--summarize", action="store_true", help="Generate an AI standup report")
+    parser.add_argument("--update-tickets", action="store_true", help="Update Notion tickets with project activity")
+    parser.add_argument("--concurrency", type=int, default=1, help="Number of projects to sync in parallel")
 
     args = parser.parse_args()
     if args.validate_config:
@@ -600,12 +699,50 @@ def main() -> None:
         print("Config OK")
         return
 
-    if not args.project:
-        parser.error("--project is required unless --validate-config is used")
+    if not args.project and not args.all and not args.summarize:
+        parser.error("Either --project, --all, or --summarize is required unless --validate-config is used")
 
+    config = load_config(args.config)
     engine = ScalersSlackEngine(config_path=args.config)
     try:
-        engine.run_sync(project_name=args.project, since=args.since, query=args.query, dry_run=args.dry_run)
+        if args.summarize:
+            report_prompt = engine.run_summarize(since=args.since, concurrency=args.concurrency)
+            print(report_prompt)
+            return
+
+        if args.update_tickets:
+            if args.all:
+                projects = config.get("projects", [])
+                for p in projects:
+                    res = engine.run_ticket_update(p["name"], since=args.since)
+                    print(f"[{p['name']}] {res}")
+            elif args.project:
+                print(engine.run_ticket_update(args.project, since=args.since))
+            else:
+                parser.error("--update-tickets requires --project or --all")
+            return
+
+        if args.all:
+            projects_to_run = [p["name"] for p in config.get("projects", [])]
+        else:
+            projects_to_run = [args.project] if args.project else []
+
+        if not projects_to_run:
+            print("No projects to run.")
+            return
+
+        def sync_one(p_name: str) -> None:
+            try:
+                engine.run_sync(project_name=p_name, since=args.since, query=args.query, dry_run=args.dry_run)
+            except Exception as exc:
+                print(f"Error syncing project '{p_name}': {exc}", file=sys.stderr)
+
+        if args.concurrency > 1 and len(projects_to_run) > 1:
+            with ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+                executor.map(sync_one, projects_to_run)
+        else:
+            for project_name in projects_to_run:
+                sync_one(project_name)
     finally:
         engine.close()
 

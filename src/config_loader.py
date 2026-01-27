@@ -75,6 +75,15 @@ DEFAULT_CONFIG = {
 }
 
 
+def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    for key, value in overrides.items():
+        if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
 def load_config(config_path: str) -> dict[str, Any]:
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     full_path = os.path.join(base_path, config_path)
@@ -83,16 +92,10 @@ def load_config(config_path: str) -> dict[str, Any]:
     if os.path.exists(full_path):
         with open(full_path, "r") as handle:
             user_config = cast(dict[str, Any], json.load(handle))
-        if "settings" in user_config:
-            for key, value in user_config["settings"].items():
-                if isinstance(value, dict) and key in config["settings"]:
-                    config["settings"][key].update(value)
-                else:
-                    config["settings"][key] = value
-        if "projects" in user_config:
-            config["projects"] = user_config["projects"]
+        _deep_merge(config, user_config)
 
     return config
+
 
 
 def get_project(config: dict[str, Any], name: str) -> dict[str, Any] | None:

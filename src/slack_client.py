@@ -250,6 +250,12 @@ class SlackClient:
         data = self._request("GET", "conversations.info", params=params)
         return cast(dict[str, Any], data.get("channel", {}))
 
+    def get_user_info(self, user_id: str) -> dict[str, Any]:
+        params = {"user": user_id}
+        data = self._request("GET", "users.info", params=params)
+        return cast(dict[str, Any], data.get("user", {}))
+
+
     def reset_stats(self) -> None:
         self.stats = {
             "api_calls": 0,
