@@ -8,6 +8,10 @@ NOTION_ID_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 NOTION_ID_DASHED_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
+NOTION_ID_IN_TEXT_RE = re.compile(r"[0-9a-fA-F]{32}")
+NOTION_ID_DASHED_IN_TEXT_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -51,6 +55,20 @@ def _effective_feature(settings: dict, project: dict, key: str) -> bool:
 
 def _validate_notion_id(value: str) -> bool:
     return bool(NOTION_ID_RE.match(value) or NOTION_ID_DASHED_RE.match(value))
+
+
+def _extract_notion_page_id(value: str) -> str | None:
+    if NOTION_ID_RE.match(value):
+        return value
+    if NOTION_ID_DASHED_RE.match(value):
+        return value.replace("-", "")
+    dashed = NOTION_ID_DASHED_IN_TEXT_RE.search(value)
+    if dashed:
+        return dashed.group(0).replace("-", "")
+    raw = NOTION_ID_IN_TEXT_RE.search(value)
+    if raw:
+        return raw.group(0)
+    return None
 
 
 def validate_config(config: dict) -> list[str]:
@@ -109,6 +127,10 @@ def validate_config(config: dict) -> list[str]:
             property_name = audit_settings.get("notion_last_synced_property")
             if not property_name:
                 errors.append("settings.audit.notion_last_synced_property is required when last synced is enabled")
+
+        notion_page_url = project.get("notion_page_url")
+        if notion_page_url and not _extract_notion_page_id(notion_page_url):
+            errors.append(f"project '{name}' has invalid notion_page_url")
 
         pagination = project.get("slack_pagination", {})
         for key in ["history_limit", "history_max_pages", "search_limit", "search_max_pages"]:

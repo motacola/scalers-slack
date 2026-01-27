@@ -42,6 +42,29 @@ class ConfigValidationTests(unittest.TestCase):
         errors = validate_config(config)
         self.assertFalse(any("notion" in err for err in errors))
 
+    def test_notion_page_url_validation(self):
+        config = {
+            "settings": {
+                "features": {"enable_notion_audit_note": False, "enable_notion_last_synced": False},
+                "audit": {},
+            },
+            "projects": [
+                {
+                    "name": "demo",
+                    "slack_channel_id": "C012345678",
+                    "notion_page_url": "https://www.notion.so/Example-Page-0123456789abcdef0123456789abcdef",
+                },
+                {
+                    "name": "bad",
+                    "slack_channel_id": "C012345679",
+                    "notion_page_url": "https://www.notion.so/Example-Page-invalid",
+                },
+            ],
+        }
+        errors = validate_config(config)
+        self.assertTrue(any("project 'bad' has invalid notion_page_url" in err for err in errors))
+        self.assertFalse(any("project 'demo' has invalid notion_page_url" in err for err in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
