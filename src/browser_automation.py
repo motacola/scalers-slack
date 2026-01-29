@@ -587,7 +587,8 @@ class SlackBrowserClient:
             if method.upper() == "GET":
                 response = request.get(url, headers=headers)
             else:
-                response = request.fetch(url, method=method, headers=headers, json=body or {})
+                payload = json.dumps(body or {})
+                response = request.fetch(url, method=method, headers=headers, data=payload)
 
             status = response.status
             try:
@@ -626,25 +627,40 @@ class SlackBrowserClient:
 
         workspace_id = self.config.slack_workspace_id
 
+        def _extract_token_from_storage_state() -> str | None:
+            try:
+                state = self.session._context.storage_state()
+            except Exception:
+                return None
+            for origin in state.get("origins", []):
+                if "slack.com" not in origin.get("origin", ""):
+                    continue
+                for entry in origin.get("localStorage", []):
+                    if entry.get("name") not in {"localConfig_v2", "localConfig"}:
+                        continue
+                    raw = entry.get("value")
+                    if not isinstance(raw, str):
+                        continue
+                    try:
+                        parsed = json.loads(raw)
+                    except Exception:
+                        continue
+                    teams = parsed.get("teams") if isinstance(parsed, dict) else None
+                    if not isinstance(teams, dict):
+                        continue
+                    if workspace_id and workspace_id in teams and isinstance(teams[workspace_id], dict):
+                        token = teams[workspace_id].get("token")
+                        if isinstance(token, str):
+                            return token
+                    for team in teams.values():
+                        if isinstance(team, dict):
+                            token = team.get("token")
+                            if isinstance(token, str):
+                                return token
+            return None
+
         def action(page):
-            return page.evaluate(
-                """
-                (workspaceId) => {
-                    const raw = localStorage.getItem('localConfig_v2') || localStorage.getItem('localConfig');
-                    if (!raw) return null;
-                    let parsed = null;
-                    try { parsed = JSON.parse(raw); } catch (e) { return null; }
-                    const teams = parsed && parsed.teams ? parsed.teams : null;
-                    if (!teams) return null;
-                    if (workspaceId && teams[workspaceId] && teams[workspaceId].token) {
-                        return teams[workspaceId].token;
-                    }
-                    const firstTeam = Object.values(teams)[0];
-                    return firstTeam && firstTeam.token ? firstTeam.token : null;
-                }
-                """,
-                workspace_id,
-            )
+            return _extract_token_from_storage_state()
 
         token = self._with_page(self._slack_client_home(), action)
         if isinstance(token, str) and token:
@@ -665,25 +681,14 @@ class SlackBrowserClient:
                 "(waiting up to %s seconds).",
                 int(self.config.interactive_login_timeout_ms / 1000),
             )
-            handle = page.wait_for_function(
-                """
-                () => {
-                    const raw = localStorage.getItem('localConfig_v2') || localStorage.getItem('localConfig');
-                    if (!raw) return null;
-                    let parsed = null;
-                    try { parsed = JSON.parse(raw); } catch (e) { return null; }
-                    const teams = parsed && parsed.teams ? parsed.teams : null;
-                    if (!teams) return null;
-                    const firstTeam = Object.values(teams)[0];
-                    return firstTeam && firstTeam.token ? firstTeam.token : null;
-                }
-                """,
+            page.wait_for_selector(
+                "div[role='application'], div[data-qa='client_container']",
                 timeout=self.config.interactive_login_timeout_ms,
             )
-            token = handle.json_value()
+            if self.config.auto_save_storage_state:
+                self.session.save_storage_state()
+            token = self._get_web_token()
             if isinstance(token, str) and token:
-                if self.config.auto_save_storage_state:
-                    self.session.save_storage_state()
                 return token
         except Exception as exc:
             logger.error("Slack interactive login failed: %s", exc)
