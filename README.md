@@ -97,13 +97,24 @@ If API keys are not available, enable the browser fallback in `config.json`:
 \"browser_automation\": {
   \"enabled\": true,
   \"storage_state_path\": \"browser_storage_state.json\",
-  \"slack_workspace_id\": \"TBLCQAFEG\"
+  \"slack_workspace_id\": \"TBLCQAFEG\",
+  \"headless\": false,
+  \"verbose_logging\": false,
+  \"keep_open\": false,
+  \"interactive_login\": true,
+  \"interactive_login_timeout_ms\": 120000,
+  \"auto_save_storage_state\": true
 }
 ```
 
 Create a storage state file by logging into Slack/Notion in an automated browser session:
 ```bash
 python -m playwright codegen --save-storage browser_storage_state.json https://app.slack.com/client/TBLCQAFEG
+```
+
+Or refresh it interactively during a run:
+```bash
+python -m src.engine --project <name> --headed --refresh-storage-state
 ```
 
 Run a quick health check:
@@ -114,6 +125,7 @@ python scripts/browser_health_check.py --config config.json
 Notes:
 - Slack browser fallback uses your logged-in session cookies to call Slack Web API endpoints.
 - Notion browser fallback attempts to set the date property by UI automation; verify the update if the UI changes.
+- Use `--keep-browser-open` to keep the browser session open after the run (useful for debugging).
 
 ## Notes
 - The Slack and Notion APIs require their respective permissions.

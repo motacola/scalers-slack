@@ -44,6 +44,11 @@ The `BrowserAutomationConfig` dataclass allows you to configure the browser auto
 - `slack_client_url`: Base URL for the Slack client.
 - `slack_api_base_url`: Base URL for the Slack API.
 - `notion_base_url`: Base URL for Notion.
+- `verbose_logging`: Enable verbose browser logging.
+- `keep_open`: Keep the browser session open after a run.
+- `interactive_login`: Allow interactive login when headed.
+- `interactive_login_timeout_ms`: Maximum wait time for interactive login.
+- `auto_save_storage_state`: Save storage state after interactive login.
 
 ## Usage
 
@@ -56,6 +61,7 @@ config = BrowserAutomationConfig(
     enabled=True,
     storage_state_path="./storage_state.json",
     headless=False,
+    interactive_login=True,
 )
 
 session = BrowserSession(config)
@@ -94,6 +100,16 @@ The module includes comprehensive error handling and logging to ensure robustnes
 - **Headless Mode**: Enable `headless` mode for production environments.
 - **Timeouts**: Adjust `timeout_ms` based on network conditions.
 - **Logging**: Configure logging to monitor browser automation activities.
+- **Interactive Login**: Use headed mode with `interactive_login` to refresh storage state without manual scripts.
+
+## CLI Flags
+
+The main engine CLI exposes browser-related flags:
+
+- `--headless` / `--headed`: Force headless or headed browser mode.
+- `--verbose-browser`: Enable verbose browser logging.
+- `--keep-browser-open`: Keep the browser session open after a run.
+- `--refresh-storage-state`: Allow interactive login and auto-save storage state.
 
 ## Testing
 
