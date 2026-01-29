@@ -1,10 +1,17 @@
 """Tests for the browser automation module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from src.browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
+from src.browser_automation import (
+    BrowserAutomationConfig,
+    BrowserSession,
+    LoadBalancer,
+    NotionBrowserClient,
+    PerformanceMonitor,
+    SlackBrowserClient,
+)
 
 
 @pytest.fixture
@@ -172,6 +179,41 @@ def test_security_measures(mock_browser_session, browser_config):
     # In a real scenario, you would test authentication and authorization
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)
     assert slack_client.config.slack_workspace_id == "T123456"
+
+
+def test_load_balancer_round_robin_selection():
+    """Test that load balancer selects workers in order starting at first."""
+    balancer = LoadBalancer(max_workers=2)
+    balancer.add_worker("worker-1")
+    balancer.add_worker("worker-2")
+
+    first = balancer.get_available_worker()
+    second = balancer.get_available_worker()
+
+    assert first == "worker-1"
+    assert second == "worker-2"
+
+
+def test_performance_monitor_stop_before_start_logs_warning():
+    """Test that stopping before starting does not update metrics."""
+    monitor = PerformanceMonitor()
+    with patch("src.browser_automation.logger") as mock_logger:
+        monitor.stop_monitoring(success=True, operation_name="op")
+        assert mock_logger.warning.called
+    assert monitor.get_metrics()["sync_operations"] == 0
+    assert monitor.get_metrics()["total_time_ms"] == 0
+
+
+def test_log_event_without_directory():
+    """Test log_event writes when event_log_path has no directory."""
+    config = BrowserAutomationConfig(event_log_path="events.jsonl")
+    session = BrowserSession(config)
+
+    with patch("src.browser_automation.os.makedirs") as mock_makedirs, patch(
+        "builtins.open", mock_open()
+    ):
+        session.log_event("test_event", {"ok": True})
+        mock_makedirs.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -44,8 +44,9 @@ class LoadBalancer:
             str | None: The ID of an available worker, or None if no workers are available.
         """
         if self.active_workers < self.max_workers and self.workers:
+            worker = self.workers[self.active_workers % len(self.workers)]
             self.active_workers += 1
-            return self.workers[self.active_workers % len(self.workers)]
+            return worker
         return None
     
     def release_worker(self):
@@ -144,6 +145,9 @@ class PerformanceMonitor:
             success: Whether the operation was successful.
             operation_name: The name of the operation being monitored.
         """
+        if not self.start_time:
+            logger.warning("PerformanceMonitor.stop_monitoring called before start_monitoring.")
+            return
         elapsed_time = time.time() - self.start_time
         self.metrics["total_time_ms"] += elapsed_time * 1000
         self.metrics["sync_operations"] += 1
@@ -362,7 +366,9 @@ class BrowserSession:
             "detail": detail,
         }
         try:
-            os.makedirs(os.path.dirname(self.config.event_log_path), exist_ok=True)
+            log_dir = os.path.dirname(self.config.event_log_path)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
             with open(self.config.event_log_path, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(payload) + "\n")
         except Exception as exc:
