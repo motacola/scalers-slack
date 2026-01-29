@@ -1,8 +1,234 @@
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import urlencode
+
+logger = logging.getLogger(__name__)
+
+
+class LoadBalancer:
+    """Manages load balancing for distributed environments."""
+    
+    def __init__(self, max_workers: int = 5):
+        self.max_workers = max_workers
+        self.workers = []
+        self.active_workers = 0
+    
+    def add_worker(self, worker_id: str):
+        """Add a worker to the load balancer.
+        
+        Args:
+            worker_id: The ID of the worker to add.
+        """
+        if worker_id not in self.workers:
+            self.workers.append(worker_id)
+    
+    def remove_worker(self, worker_id: str):
+        """Remove a worker from the load balancer.
+        
+        Args:
+            worker_id: The ID of the worker to remove.
+        """
+        if worker_id in self.workers:
+            self.workers.remove(worker_id)
+    
+    def get_available_worker(self) -> str | None:
+        """Get an available worker for processing.
+        
+        Returns:
+            str | None: The ID of an available worker, or None if no workers are available.
+        """
+        if self.active_workers < self.max_workers and self.workers:
+            self.active_workers += 1
+            return self.workers[self.active_workers % len(self.workers)]
+        return None
+    
+    def release_worker(self):
+        """Release a worker after processing."""
+        if self.active_workers > 0:
+            self.active_workers -= 1
+    
+    def get_worker_count(self) -> int:
+        """Get the number of available workers.
+        
+        Returns:
+            int: The number of available workers.
+        """
+        return len(self.workers)
+    
+    def get_active_worker_count(self) -> int:
+        """Get the number of active workers.
+        
+        Returns:
+            int: The number of active workers.
+        """
+        return self.active_workers
+
+
+class ScalabilityManager:
+    """Manages optimizations for handling larger datasets and higher traffic."""
+    
+    def __init__(self, max_concurrent_sessions: int = 5, batch_size: int = 100):
+        self.max_concurrent_sessions = max_concurrent_sessions
+        self.batch_size = batch_size
+        self.active_sessions = 0
+    
+    def acquire_session(self) -> bool:
+        """Acquire a session slot for concurrent operations.
+        
+        Returns:
+            bool: True if a session slot is available, False otherwise.
+        """
+        if self.active_sessions < self.max_concurrent_sessions:
+            self.active_sessions += 1
+            return True
+        return False
+    
+    def release_session(self):
+        """Release a session slot after operation completion."""
+        if self.active_sessions > 0:
+            self.active_sessions -= 1
+    
+    def get_batch_size(self) -> int:
+        """Get the recommended batch size for operations.
+        
+        Returns:
+            int: The recommended batch size.
+        """
+        return self.batch_size
+    
+    def optimize_batch_size(self, data_size: int) -> int:
+        """Optimize the batch size based on the dataset size.
+        
+        Args:
+            data_size: The size of the dataset.
+            
+        Returns:
+            int: The optimized batch size.
+        """
+        if data_size < 1000:
+            return min(self.batch_size, data_size)
+        elif data_size < 10000:
+            return min(self.batch_size * 2, data_size)
+        else:
+            return min(self.batch_size * 5, data_size)
+
+
+class PerformanceMonitor:
+    """Monitors and tracks the performance of sync operations."""
+    
+    def __init__(self):
+        self.metrics = {
+            "sync_operations": 0,
+            "successful_operations": 0,
+            "failed_operations": 0,
+            "total_time_ms": 0,
+            "average_time_ms": 0,
+            "bottlenecks": [],
+        }
+        self.start_time = 0
+    
+    def start_monitoring(self):
+        """Start monitoring a sync operation."""
+        self.start_time = time.time()
+    
+    def stop_monitoring(self, success: bool, operation_name: str = None):
+        """Stop monitoring a sync operation and record metrics.
+        
+        Args:
+            success: Whether the operation was successful.
+            operation_name: The name of the operation being monitored.
+        """
+        elapsed_time = time.time() - self.start_time
+        self.metrics["total_time_ms"] += elapsed_time * 1000
+        self.metrics["sync_operations"] += 1
+        
+        if success:
+            self.metrics["successful_operations"] += 1
+        else:
+            self.metrics["failed_operations"] += 1
+        
+        if self.metrics["sync_operations"] > 0:
+            self.metrics["average_time_ms"] = self.metrics["total_time_ms"] / self.metrics["sync_operations"]
+        
+        # Identify bottlenecks
+        if operation_name and elapsed_time > 5:  # Threshold for identifying bottlenecks
+            self.metrics["bottlenecks"].append({
+                "operation": operation_name,
+                "time_ms": elapsed_time * 1000,
+                "timestamp": time.time(),
+            })
+    
+    def get_metrics(self) -> dict[str, Any]:
+        """Get the current performance metrics.
+        
+        Returns:
+            dict: A dictionary containing the performance metrics.
+        """
+        return dict(self.metrics)
+    
+    def get_bottlenecks(self) -> list[dict[str, Any]]:
+        """Get a list of identified bottlenecks.
+        
+        Returns:
+            list: A list of dictionaries containing bottleneck information.
+        """
+        return self.metrics["bottlenecks"]
+    
+    def reset(self):
+        """Reset all performance metrics."""
+        self.metrics = {
+            "sync_operations": 0,
+            "successful_operations": 0,
+            "failed_operations": 0,
+            "total_time_ms": 0,
+            "average_time_ms": 0,
+            "bottlenecks": [],
+        }
+        self.start_time = 0
+
+
+class RecoveryManager:
+    """Manages automatic recovery mechanisms for common failure scenarios."""
+    
+    def __init__(self, max_retries: int = 3, retry_delay_ms: int = 1000):
+        self.max_retries = max_retries
+        self.retry_delay_ms = retry_delay_ms
+        self.recovery_attempts = 0
+    
+    def handle_failure(self, error: Exception, recovery_action: callable) -> bool:
+        """Attempt to recover from a failure by executing a recovery action.
+        
+        Args:
+            error: The exception that caused the failure.
+            recovery_action: A callable that attempts to recover from the failure.
+            
+        Returns:
+            bool: True if recovery was successful, False otherwise.
+        """
+        self.recovery_attempts += 1
+        logger.warning(f"Attempting recovery from failure (attempt {self.recovery_attempts}): {error}")
+        
+        if self.recovery_attempts > self.max_retries:
+            logger.error(f"Max recovery attempts ({self.max_retries}) exceeded for error: {error}")
+            return False
+        
+        try:
+            time.sleep(self.retry_delay_ms / 1000)
+            recovery_action()
+            logger.info(f"Recovery successful after {self.recovery_attempts} attempt(s)")
+            self.recovery_attempts = 0
+            return True
+        except Exception as e:
+            logger.error(f"Recovery failed: {e}")
+            return False
+    
+    def reset(self):
+        """Reset the recovery attempts counter."""
+        self.recovery_attempts = 0
 
 _sync_playwright: Any = None
 try:
@@ -24,6 +250,8 @@ class BrowserAutomationConfig:
     slack_client_url: str = "https://app.slack.com/client"
     slack_api_base_url: str = "https://slack.com/api"
     notion_base_url: str = "https://www.notion.so"
+    max_retries: int = 3
+    retry_delay_ms: int = 1000
 
 
 class BrowserSession:
@@ -32,29 +260,57 @@ class BrowserSession:
         self._playwright: Any = None
         self._browser: Any = None
         self._context: Any = None
+        self.recovery_manager = RecoveryManager(
+            max_retries=config.max_retries,
+            retry_delay_ms=config.retry_delay_ms
+        )
+        self.performance_monitor = PerformanceMonitor()
+        self.scalability_manager = ScalabilityManager(
+            max_concurrent_sessions=5,
+            batch_size=100
+        )
+        self.load_balancer = LoadBalancer(max_workers=5)
 
     def start(self) -> None:
         if self._context:
             return
         if sync_playwright is None:
+            logger.error("Playwright is not installed. Install it to use browser automation fallback.")
             raise RuntimeError("Playwright is not installed. Install it to use browser automation fallback.")
 
-        self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.launch(
-            headless=self.config.headless,
-            slow_mo=self.config.slow_mo_ms,
-        )
-        context_args: dict[str, Any] = {}
-        if self.config.storage_state_path:
-            context_args["storage_state"] = self.config.storage_state_path
-        self._context = self._browser.new_context(**context_args)
-        self._context.set_default_timeout(self.config.timeout_ms)
+        def recovery_action():
+            """Recovery action to restart the browser session."""
+            self.close()
+            self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.launch(
+                headless=self.config.headless,
+                slow_mo=self.config.slow_mo_ms,
+            )
+            context_args: dict[str, Any] = {}
+            if self.config.storage_state_path:
+                context_args["storage_state"] = self.config.storage_state_path
+            self._context = self._browser.new_context(**context_args)
+            self._context.set_default_timeout(self.config.timeout_ms)
+
+        try:
+            recovery_action()
+            logger.info("Browser session started successfully.")
+        except Exception as e:
+            if self.recovery_manager.handle_failure(e, recovery_action):
+                logger.info("Browser session recovered successfully.")
+            else:
+                logger.error(f"Failed to start browser session after recovery attempts: {e}")
+                raise
 
     def new_page(self, url: str):
         self.start()
         page = self._context.new_page()
         page.goto(url, wait_until="domcontentloaded")
         return page
+
+    def request(self):
+        self.start()
+        return self._context.request
 
     def close(self) -> None:
         if self._context:
@@ -74,6 +330,7 @@ class SlackBrowserClient:
         self.config = config
         self.stats: dict[str, Any] = {}
         self.pagination_stats: dict[str, Any] = {}
+        self._web_token: str | None = None
         self.reset_stats()
 
     def _slack_client_home(self) -> str:
@@ -81,12 +338,26 @@ class SlackBrowserClient:
             return f"{self.config.slack_client_url}/{self.config.slack_workspace_id}"
         return self.config.slack_client_url
 
-    def _with_page(self, url: str, func):
+    def _with_page(self, url: str, func, retry_on_failure: bool = True):
         page = self.session.new_page(url)
-        try:
-            return func(page)
-        finally:
-            page.close()
+        last_error = None
+        for attempt in range(self.config.max_retries if retry_on_failure else 1):
+            try:
+                result = func(page)
+                logger.info(f"Page action completed successfully for URL: {url}")
+                return result
+            except Exception as e:
+                last_error = e
+                logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
+                if retry_on_failure and attempt < self.config.max_retries - 1:
+                    time.sleep(self.config.retry_delay_ms / 1000)
+                else:
+                    break
+        if last_error:
+            logger.error(f"Page action failed after {self.config.max_retries} attempts for URL {url}")
+            raise last_error
+        
+        page.close()
 
     def _slack_api_call(
         self,
@@ -97,57 +368,79 @@ class SlackBrowserClient:
     ) -> dict[str, Any]:
         base_url = f"{self.config.slack_api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         url = f"{base_url}?{urlencode(params or {})}" if params else base_url
-        payload = {
-            "url": url,
-            "method": method,
-            "body": body,
-        }
+        token = self._get_web_token()
+        headers = {"Content-Type": "application/json; charset=utf-8"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        request = self.session.request()
+        try:
+            if method.upper() == "GET":
+                response = request.get(url, headers=headers)
+            else:
+                response = request.fetch(url, method=method, headers=headers, json=body or {})
+
+            status = response.status
+            try:
+                data = cast(dict[str, Any], response.json())
+            except Exception:
+                data = {}
+
+            self.stats["api_calls"] += 1
+            if status == 429:
+                self.stats["rate_limit_hits"] += 1
+                logger.warning(f"Rate limit hit for Slack API endpoint: {endpoint}")
+
+            if status and status >= 400:
+                error = data.get("error") if isinstance(data, dict) else "unknown_error"
+                logger.error(f"Slack API error (browser): {status} {error}")
+                raise RuntimeError(f"Slack API error (browser): {status} {error}")
+
+            if isinstance(data, dict) and not data.get("ok", True):
+                error_msg = data.get('error', 'unknown_error')
+                logger.error(f"Slack API error (browser): {error_msg}")
+                raise RuntimeError(f"Slack API error (browser): {error_msg}")
+
+            if not isinstance(data, dict):
+                logger.error("Slack API error (browser): invalid response")
+                raise RuntimeError("Slack API error (browser): invalid response")
+
+            logger.info(f"Slack API call successful: {endpoint}")
+            return data
+        except Exception as e:
+            logger.error(f"Failed to execute Slack API call: {e}")
+            raise
+
+    def _get_web_token(self) -> str | None:
+        if self._web_token:
+            return self._web_token
+
+        workspace_id = self.config.slack_workspace_id
 
         def action(page):
             return page.evaluate(
                 """
-                async ({url, method, body}) => {
-                    const options = {
-                        method,
-                        credentials: 'include',
-                        headers: { 'Content-Type': 'application/json; charset=utf-8' },
-                    };
-                    if (body) {
-                        options.body = JSON.stringify(body);
+                (workspaceId) => {
+                    const raw = localStorage.getItem('localConfig_v2') || localStorage.getItem('localConfig');
+                    if (!raw) return null;
+                    let parsed = null;
+                    try { parsed = JSON.parse(raw); } catch (e) { return null; }
+                    const teams = parsed && parsed.teams ? parsed.teams : null;
+                    if (!teams) return null;
+                    if (workspaceId && teams[workspaceId] && teams[workspaceId].token) {
+                        return teams[workspaceId].token;
                     }
-                    const response = await fetch(url, options);
-                    let data = null;
-                    try {
-                        data = await response.json();
-                    } catch (err) {
-                        data = null;
-                    }
-                    return { status: response.status, data };
+                    const firstTeam = Object.values(teams)[0];
+                    return firstTeam && firstTeam.token ? firstTeam.token : null;
                 }
                 """,
-                payload,
+                workspace_id,
             )
 
-        result = self._with_page(self._slack_client_home(), action)
-        result = cast(dict[str, Any], result)
-        status = result.get("status")
-        data = cast(dict[str, Any], result.get("data") or {})
-
-        self.stats["api_calls"] += 1
-        if status == 429:
-            self.stats["rate_limit_hits"] += 1
-
-        if status and status >= 400:
-            error = data.get("error") if isinstance(data, dict) else "unknown_error"
-            raise RuntimeError(f"Slack API error (browser): {status} {error}")
-
-        if isinstance(data, dict) and not data.get("ok", True):
-            raise RuntimeError(f"Slack API error (browser): {data.get('error', 'unknown_error')}")
-
-        if not isinstance(data, dict):
-            raise RuntimeError("Slack API error (browser): invalid response")
-
-        return data
+        token = self._with_page(self._slack_client_home(), action)
+        if isinstance(token, str) and token:
+            self._web_token = token
+        return self._web_token
 
     def fetch_channel_history_paginated(
         self,
@@ -242,12 +535,26 @@ class NotionBrowserClient:
         self.stats: dict[str, Any] = {}
         self.reset_stats()
 
-    def _with_page(self, url: str, func):
+    def _with_page(self, url: str, func, retry_on_failure: bool = True):
         page = self.session.new_page(url)
-        try:
-            return func(page)
-        finally:
-            page.close()
+        last_error = None
+        for attempt in range(self.config.max_retries if retry_on_failure else 1):
+            try:
+                result = func(page)
+                logger.info(f"Page action completed successfully for URL: {url}")
+                return result
+            except Exception as e:
+                last_error = e
+                logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
+                if retry_on_failure and attempt < self.config.max_retries - 1:
+                    time.sleep(self.config.retry_delay_ms / 1000)
+                else:
+                    break
+        if last_error:
+            logger.error(f"Page action failed after {self.config.max_retries} attempts for URL {url}")
+            raise last_error
+        
+        page.close()
 
     def _page_url(self, page_id_or_url: str) -> str:
         if page_id_or_url.startswith("http"):
@@ -259,7 +566,11 @@ class NotionBrowserClient:
 
         def action(page):
             page.wait_for_timeout(1500)
-            page.click("div[contenteditable='true']", timeout=10000)
+            page.wait_for_selector("div[role='main']", timeout=15000)
+            editor = page.locator("div[role='main'] div[contenteditable='true']").last
+            if editor.count() == 0:
+                editor = page.locator("div[contenteditable='true']").last
+            editor.click(timeout=15000)
             page.keyboard.type(text)
             page.keyboard.press("Enter")
 

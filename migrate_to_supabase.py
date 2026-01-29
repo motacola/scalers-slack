@@ -1,30 +1,37 @@
 import json
 import os
 
-import requests
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
-SUPABASE_TOKEN = os.getenv("SUPABASE_TOKEN", "")
-SQL_API_URL = os.getenv("SUPABASE_SQL_API_URL", "")
+# Load environment variables from .env file
+load_dotenv()
 
-def run_sql(sql):
-    if not SUPABASE_TOKEN or not SQL_API_URL:
-        print("Missing SUPABASE_TOKEN or SUPABASE_SQL_API_URL in environment.")
-        return None
-    headers = {
-        "Authorization": f"Bearer {SUPABASE_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {"query": sql}
-    response = requests.post(SQL_API_URL, headers=headers, json=payload)
-    if response.status_code not in [200, 201]:
-        print(f"Error running SQL: {response.status_code} {response.text}")
-        return None
-    return response.json()
+# Get credentials
+SUPABASE_URL = "https://hmehmfuxzqejfmbyumyc.supabase.co"
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not SUPABASE_KEY:
+    print("❌ Error: SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY not found in .env file")
+    print("\n📝 To fix this:")
+    print("1. Go to: https://supabase.com/dashboard/project/hmehmfuxzqejfmbyumyc/settings/api")
+    print("2. Copy your 'service_role' key (secret key, recommended for migrations)")
+    print("3. Add to your .env file:")
+    print("   SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...")
+    exit(1)
 
 def main():
     print("🚀 Starting migration to Supabase...")
     
-    # 1. Create the table
+    # Initialize Supabase client
+    try:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("✓ Connected to Supabase")
+    except Exception as e:
+        print(f"❌ Failed to connect to Supabase: {e}")
+        return
+
+    # 1. Create the table using raw SQL
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS public.projects (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -37,43 +44,57 @@ def main():
         updated_at TIMESTAMPTZ DEFAULT now()
     );
     """
-    print("Creating projects table...")
-    run_sql(create_table_sql)
+    
+    print("📦 Creating projects table...")
+    try:
+        result = supabase.rpc('exec_sql', {'query': create_table_sql}).execute()
+        print("✓ Table created/verified")
+    except Exception as e:
+        # Table might already exist or we might need to use a different approach
+        # Let's try using the postgrest API instead
+        print(f"⚠️  Note: {e}")
+        print("   Proceeding with data insertion (table may already exist)...")
 
     # 2. Load config.json
     try:
         with open("config.json", "r") as f:
             config = json.load(f)
+        projects = config.get("projects", [])
+        print(f"✓ Found {len(projects)} projects in config.json")
     except Exception as e:
-        print(f"Error loading config.json: {e}")
+        print(f"❌ Error loading config.json: {e}")
         return
+
+    # 3. Insert each project using the Supabase client
+    success_count = 0
+    error_count = 0
     
-    projects = config.get("projects", [])
-    print(f"Found {len(projects)} projects in config.json")
-
-    # 3. Insert each project
     for p in projects:
-        name = p.get("name", "").replace("'", "''")
-        slack_id = p.get("slack_channel_id", "").replace("'", "''")
-        notion_url = p.get("notion_page_url", "").replace("'", "''")
-        audit_id = p.get("notion_audit_page_id", "").replace("'", "''")
-        last_sync_id = p.get("notion_last_synced_page_id", "").replace("'", "''")
+        project_data = {
+            "name": p.get("name", ""),
+            "slack_channel_id": p.get("slack_channel_id", ""),
+            "notion_page_url": p.get("notion_page_url", ""),
+            "notion_audit_page_id": p.get("notion_audit_page_id", ""),
+            "notion_last_synced_page_id": p.get("notion_last_synced_page_id", "")
+        }
         
-        insert_sql = f"""
-        INSERT INTO public.projects (name, slack_channel_id, notion_page_url, notion_audit_page_id, notion_last_synced_page_id)
-        VALUES ('{name}', '{slack_id}', '{notion_url}', '{audit_id}', '{last_sync_id}')
-        ON CONFLICT (name) DO UPDATE SET
-            slack_channel_id = EXCLUDED.slack_channel_id,
-            notion_page_url = EXCLUDED.notion_page_url,
-            notion_audit_page_id = EXCLUDED.notion_audit_page_id,
-            notion_last_synced_page_id = EXCLUDED.notion_last_synced_page_id,
-            updated_at = now();
-        """
-        
-        print(f"Syncing {name}...")
-        run_sql(insert_sql)
+        try:
+            # Use upsert to insert or update if exists
+            result = supabase.table('projects').upsert(
+                project_data,
+                on_conflict='name'
+            ).execute()
+            
+            print(f"✓ Synced: {project_data['name']}")
+            success_count += 1
+        except Exception as e:
+            print(f"✗ Error syncing {project_data['name']}: {e}")
+            error_count += 1
 
-    print("✅ Migration complete!")
+    print(f"\n✅ Migration complete!")
+    print(f"   ✓ Success: {success_count}")
+    if error_count > 0:
+        print(f"   ✗ Errors: {error_count}")
 
 if __name__ == "__main__":
     main()

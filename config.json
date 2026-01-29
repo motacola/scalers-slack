@@ -1,5 +1,14 @@
 {
   "settings": {
+    "notion_hub": {
+      "url": "https://www.notion.so/quickerleads/Website-Hosting-Project-Management-Hub-28e1c9f5b34f8088a7bff341be5aec2f",
+      "enforce_hub_context": true
+    },
+    "ticket_rules": {
+      "max_note_length": 500,
+      "long_content_strategy": "link_to_gdoc",
+      "allowed_boards_only": true
+    },
     "slack": {
       "token_env": "SLACK_BOT_TOKEN",
       "base_url": "https://slack.com/api",

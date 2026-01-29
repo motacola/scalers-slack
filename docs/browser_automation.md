@@ -1,0 +1,110 @@
+# Browser Automation Documentation
+
+## Overview
+
+The browser automation module provides a robust framework for automating interactions with Slack and Notion through a web browser. This is particularly useful when API keys are not available or when browser-based interactions are preferred.
+
+## Key Components
+
+### 1. BrowserSession
+
+The `BrowserSession` class manages the lifecycle of a browser session using Playwright. It handles:
+
+- Starting and stopping the browser.
+- Creating and managing browser contexts.
+- Navigating to URLs and interacting with pages.
+
+### 2. SlackBrowserClient
+
+The `SlackBrowserClient` class automates interactions with Slack. It includes:
+
+- Fetching channel history and searching messages.
+- Updating channel topics.
+- Retrieving channel and user information.
+- Handling authentication and API calls through the browser.
+
+### 3. NotionBrowserClient
+
+The `NotionBrowserClient` class automates interactions with Notion. It includes:
+
+- Appending audit notes to Notion pages.
+- Updating page properties.
+- Checking page access and retrieving page information.
+
+## Configuration
+
+The `BrowserAutomationConfig` dataclass allows you to configure the browser automation behavior:
+
+- `enabled`: Enable or disable browser automation.
+- `storage_state_path`: Path to the browser's storage state for persistent sessions.
+- `headless`: Run the browser in headless mode.
+- `slow_mo_ms`: Slow down operations for debugging.
+- `timeout_ms`: Default timeout for browser operations.
+- `slack_workspace_id`: Slack workspace ID for multi-workspace support.
+- `slack_client_url`: Base URL for the Slack client.
+- `slack_api_base_url`: Base URL for the Slack API.
+- `notion_base_url`: Base URL for Notion.
+
+## Usage
+
+### Starting a Browser Session
+
+```python
+from src.browser_automation import BrowserSession, BrowserAutomationConfig
+
+config = BrowserAutomationConfig(
+    enabled=True,
+    storage_state_path="./storage_state.json",
+    headless=False,
+)
+
+session = BrowserSession(config)
+session.start()
+```
+
+### Using SlackBrowserClient
+
+```python
+from src.browser_automation import SlackBrowserClient
+
+slack_client = SlackBrowserClient(session, config)
+messages = slack_client.fetch_channel_history_paginated("CHANNEL_ID")
+```
+
+### Using NotionBrowserClient
+
+```python
+from src.browser_automation import NotionBrowserClient
+
+notion_client = NotionBrowserClient(session, config)
+notion_client.append_audit_note("PAGE_ID", "This is an audit note.")
+```
+
+## Error Handling
+
+The module includes comprehensive error handling and logging to ensure robustness:
+
+- Errors are logged using Python's `logging` module.
+- Exceptions are raised with descriptive messages for debugging.
+- Retry mechanisms are in place for handling rate limits and network errors.
+
+## Best Practices
+
+- **Persistent Sessions**: Use `storage_state_path` to maintain sessions across runs.
+- **Headless Mode**: Enable `headless` mode for production environments.
+- **Timeouts**: Adjust `timeout_ms` based on network conditions.
+- **Logging**: Configure logging to monitor browser automation activities.
+
+## Testing
+
+Ensure that browser automation is thoroughly tested:
+
+- Test with different configurations (headless vs. non-headless).
+- Validate interactions with Slack and Notion.
+- Test error handling and recovery mechanisms.
+
+## Future Enhancements
+
+- **Performance Optimization**: Further optimize browser automation workflows.
+- **Modularization**: Enhance modularity for better maintainability.
+- **Documentation**: Expand documentation with more examples and use cases.

@@ -255,6 +255,26 @@ class SlackClient:
         data = self._request("GET", "users.info", params=params)
         return cast(dict[str, Any], data.get("user", {}))
 
+    def find_channel_by_name(self, channel_name: str, types: str = "public_channel,private_channel") -> str | None:
+        """Find a channel ID by its name."""
+        cursor = None
+        while True:
+            params = {"types": types, "limit": 1000}
+            if cursor:
+                params["cursor"] = cursor
+            
+            data = self._request("GET", "conversations.list", params=params)
+            channels = data.get("channels", [])
+            
+            for channel in channels:
+                if channel.get("name") == channel_name:
+                    return channel.get("id")
+            
+            cursor = data.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+        return None
+
 
     def reset_stats(self) -> None:
         self.stats = {
