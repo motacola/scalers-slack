@@ -91,6 +91,7 @@ class ScalersSlackEngine:
             slack_client_url=browser_settings.get("slack_client_url", "https://app.slack.com/client"),
             slack_api_base_url=browser_settings.get("slack_api_base_url", "https://slack.com/api"),
             notion_base_url=browser_settings.get("notion_base_url", "https://www.notion.so"),
+            verbose_logging=browser_settings.get("verbose_logging", False),
         )
         slack_token = os.getenv(slack_settings.get("token_env", "SLACK_BOT_TOKEN"))
         notion_token = os.getenv(notion_settings.get("token_env", "NOTION_API_KEY"))

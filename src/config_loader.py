@@ -59,7 +59,8 @@ DEFAULT_CONFIG = {
             "slack_workspace_id": "",
             "slack_client_url": "https://app.slack.com/client",
             "slack_api_base_url": "https://slack.com/api",
-            "notion_base_url": "https://www.notion.so"
+            "notion_base_url": "https://www.notion.so",
+            "verbose_logging": False
         },
         "audit": {
             "enabled": True,

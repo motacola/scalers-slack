@@ -28,7 +28,9 @@ def browser_config():
 @pytest.fixture
 def mock_browser_session(browser_config):
     """Fixture for a mock browser session."""
-    with patch("src.browser_automation.sync_playwright") as mock_playwright:
+    with patch("src.browser_automation.sync_playwright") as mock_playwright, patch(
+        "src.browser_automation.os.path.exists", return_value=True
+    ):
         mock_playwright.return_value.start.return_value = MagicMock()
         mock_playwright.return_value.chromium.launch.return_value = MagicMock()
         mock_playwright.return_value.chromium.launch.return_value.new_context.return_value = MagicMock()
@@ -77,7 +79,9 @@ def test_slack_api_call_success(mock_browser_session, browser_config):
     mock_response.json.return_value = {"ok": True, "messages": []}
     mock_request.get.return_value = mock_response
     
-    with patch.object(slack_client.session, "request", return_value=mock_request):
+    with patch.object(slack_client, "_get_web_token", return_value="xoxc-test"), patch.object(
+        slack_client.session, "request", return_value=mock_request
+    ):
         result = slack_client._slack_api_call("conversations.history", params={"channel": "C123456"})
         assert result == {"ok": True, "messages": []}
 
@@ -93,7 +97,9 @@ def test_slack_api_call_failure(mock_browser_session, browser_config):
     mock_response.json.return_value = {"ok": False, "error": "channel_not_found"}
     mock_request.get.return_value = mock_response
     
-    with patch.object(slack_client.session, "request", return_value=mock_request):
+    with patch.object(slack_client, "_get_web_token", return_value="xoxc-test"), patch.object(
+        slack_client.session, "request", return_value=mock_request
+    ):
         with pytest.raises(RuntimeError) as exc_info:
             slack_client._slack_api_call("conversations.history", params={"channel": "C123456"})
         assert "Slack API error (browser): 404 channel_not_found" in str(exc_info.value)

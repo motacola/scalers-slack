@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, cast
@@ -252,6 +253,7 @@ class BrowserAutomationConfig:
     notion_base_url: str = "https://www.notion.so"
     max_retries: int = 3
     retry_delay_ms: int = 1000
+    verbose_logging: bool = False
 
 
 class BrowserSession:
@@ -277,6 +279,11 @@ class BrowserSession:
         if sync_playwright is None:
             logger.error("Playwright is not installed. Install it to use browser automation fallback.")
             raise RuntimeError("Playwright is not installed. Install it to use browser automation fallback.")
+        if self.config.storage_state_path and not os.path.exists(self.config.storage_state_path):
+            raise RuntimeError(
+                "Browser storage state not found. "
+                "Create it with scripts/create_storage_state.py to avoid re-login."
+            )
 
         def recovery_action():
             """Recovery action to restart the browser session."""
@@ -294,6 +301,8 @@ class BrowserSession:
 
         try:
             recovery_action()
+            if self.config.verbose_logging:
+                logger.info("Browser session started with storage_state=%s", self.config.storage_state_path)
             logger.info("Browser session started successfully.")
         except Exception as e:
             if self.recovery_manager.handle_failure(e, recovery_action):
@@ -304,9 +313,23 @@ class BrowserSession:
 
     def new_page(self, url: str):
         self.start()
-        page = self._context.new_page()
-        page.goto(url, wait_until="domcontentloaded")
-        return page
+        last_error: Exception | None = None
+        for attempt in range(self.config.max_retries):
+            page = self._context.new_page()
+            try:
+                if self.config.verbose_logging:
+                    logger.info("Navigating to %s (attempt %s)", url, attempt + 1)
+                page.goto(url, wait_until="domcontentloaded", timeout=self.config.timeout_ms)
+                return page
+            except Exception as exc:
+                last_error = exc
+                try:
+                    page.close()
+                except Exception:
+                    pass
+                if attempt < self.config.max_retries - 1:
+                    time.sleep(self.config.retry_delay_ms / 1000)
+        raise last_error or RuntimeError(f"Failed to navigate to {url}")
 
     def request(self):
         self.start()
@@ -339,25 +362,33 @@ class SlackBrowserClient:
         return self.config.slack_client_url
 
     def _with_page(self, url: str, func, retry_on_failure: bool = True):
-        page = self.session.new_page(url)
+        page = None
         last_error = None
-        for attempt in range(self.config.max_retries if retry_on_failure else 1):
-            try:
-                result = func(page)
-                logger.info(f"Page action completed successfully for URL: {url}")
-                return result
-            except Exception as e:
-                last_error = e
-                logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
-                if retry_on_failure and attempt < self.config.max_retries - 1:
-                    time.sleep(self.config.retry_delay_ms / 1000)
-                else:
-                    break
-        if last_error:
-            logger.error(f"Page action failed after {self.config.max_retries} attempts for URL {url}")
-            raise last_error
-        
-        page.close()
+        try:
+            page = self.session.new_page(url)
+            for attempt in range(self.config.max_retries if retry_on_failure else 1):
+                try:
+                    if self.config.verbose_logging:
+                        logger.info("Running page action for %s (attempt %s)", url, attempt + 1)
+                    result = func(page)
+                    logger.info(f"Page action completed successfully for URL: {url}")
+                    return result
+                except Exception as e:
+                    last_error = e
+                    logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
+                    if retry_on_failure and attempt < self.config.max_retries - 1:
+                        time.sleep(self.config.retry_delay_ms / 1000)
+                    else:
+                        break
+            if last_error:
+                logger.error(f"Page action failed after {self.config.max_retries} attempts for URL {url}")
+                raise last_error
+        finally:
+            if page is not None:
+                try:
+                    page.close()
+                except Exception:
+                    pass
 
     def _slack_api_call(
         self,
@@ -369,6 +400,11 @@ class SlackBrowserClient:
         base_url = f"{self.config.slack_api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         url = f"{base_url}?{urlencode(params or {})}" if params else base_url
         token = self._get_web_token()
+        if not token:
+            raise RuntimeError(
+                "Slack web token not found. Recreate browser storage state "
+                "with scripts/create_storage_state.py to avoid re-login."
+            )
         headers = {"Content-Type": "application/json; charset=utf-8"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -536,25 +572,39 @@ class NotionBrowserClient:
         self.reset_stats()
 
     def _with_page(self, url: str, func, retry_on_failure: bool = True):
-        page = self.session.new_page(url)
+        page = None
         last_error = None
-        for attempt in range(self.config.max_retries if retry_on_failure else 1):
-            try:
-                result = func(page)
-                logger.info(f"Page action completed successfully for URL: {url}")
-                return result
-            except Exception as e:
-                last_error = e
-                logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
-                if retry_on_failure and attempt < self.config.max_retries - 1:
-                    time.sleep(self.config.retry_delay_ms / 1000)
-                else:
-                    break
-        if last_error:
-            logger.error(f"Page action failed after {self.config.max_retries} attempts for URL {url}")
-            raise last_error
-        
-        page.close()
+        try:
+            page = self.session.new_page(url)
+            for attempt in range(self.config.max_retries if retry_on_failure else 1):
+                try:
+                    current_url = page.url or ""
+                    if "login" in current_url or "signup" in current_url:
+                        raise RuntimeError(
+                            "Notion login required. Recreate browser storage state "
+                            "with scripts/create_storage_state.py to avoid re-login."
+                        )
+                    if self.config.verbose_logging:
+                        logger.info("Running page action for %s (attempt %s)", url, attempt + 1)
+                    result = func(page)
+                    logger.info(f"Page action completed successfully for URL: {url}")
+                    return result
+                except Exception as e:
+                    last_error = e
+                    logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
+                    if retry_on_failure and attempt < self.config.max_retries - 1:
+                        time.sleep(self.config.retry_delay_ms / 1000)
+                    else:
+                        break
+            if last_error:
+                logger.error(f"Page action failed after {self.config.max_retries} attempts for URL {url}")
+                raise last_error
+        finally:
+            if page is not None:
+                try:
+                    page.close()
+                except Exception:
+                    pass
 
     def _page_url(self, page_id_or_url: str) -> str:
         if page_id_or_url.startswith("http"):
