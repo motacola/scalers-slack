@@ -97,6 +97,8 @@ class ScalersSlackEngine:
             headless=browser_settings.get("headless", True),
             slow_mo_ms=_coerce_int(browser_settings.get("slow_mo_ms"), 0),
             timeout_ms=_coerce_int(browser_settings.get("timeout_ms"), 30000),
+            browser_channel=browser_settings.get("browser_channel"),
+            user_data_dir=browser_settings.get("user_data_dir"),
             slack_workspace_id=browser_settings.get("slack_workspace_id", ""),
             slack_client_url=browser_settings.get("slack_client_url", "https://app.slack.com/client"),
             slack_api_base_url=browser_settings.get("slack_api_base_url", "https://slack.com/api"),
@@ -108,6 +110,17 @@ class ScalersSlackEngine:
                 browser_settings.get("interactive_login_timeout_ms"), 120000
             ),
             auto_save_storage_state=browser_settings.get("auto_save_storage_state", True),
+            auto_recover=browser_settings.get("auto_recover", True),
+            auto_recover_refresh=browser_settings.get("auto_recover_refresh", True),
+            smart_wait=browser_settings.get("smart_wait", True),
+            smart_wait_network_idle=browser_settings.get("smart_wait_network_idle", True),
+            smart_wait_timeout_ms=_coerce_int(browser_settings.get("smart_wait_timeout_ms"), 15000),
+            smart_wait_stability_ms=_coerce_int(browser_settings.get("smart_wait_stability_ms"), 600),
+            overlay_enabled=browser_settings.get("overlay_enabled", False),
+            recordings_dir=browser_settings.get("recordings_dir", "output/browser_recordings"),
+            event_log_path=browser_settings.get("event_log_path", "output/browser_events.jsonl"),
+            screenshot_on_step=browser_settings.get("screenshot_on_step", False),
+            screenshot_on_error=browser_settings.get("screenshot_on_error", True),
         )
         slack_token = os.getenv(slack_settings.get("token_env", "SLACK_BOT_TOKEN"))
         notion_token = os.getenv(notion_settings.get("token_env", "NOTION_API_KEY"))
@@ -726,6 +739,17 @@ def main() -> None:
         action="store_true",
         help="Allow interactive login to refresh browser storage state",
     )
+    parser.add_argument("--browser-channel", help="Browser channel (e.g. chrome, msedge)")
+    parser.add_argument("--user-data-dir", help="Persistent browser profile directory")
+    parser.add_argument("--recordings-dir", help="Directory for browser recordings (screenshots)")
+    parser.add_argument("--event-log-path", help="Path for browser event log (JSONL)")
+    parser.add_argument("--screenshot-on-step", action="store_true", help="Screenshot after successful actions")
+    parser.add_argument("--no-screenshot-on-error", action="store_true", help="Disable screenshots on errors")
+    parser.add_argument("--smart-wait", action="store_true", help="Enable smart wait for page stability")
+    parser.add_argument("--no-smart-wait", action="store_true", help="Disable smart wait for page stability")
+    parser.add_argument("--overlay", action="store_true", help="Show browser status overlay")
+    parser.add_argument("--auto-recover", action="store_true", help="Enable auto-recovery on failures")
+    parser.add_argument("--no-auto-recover", action="store_true", help="Disable auto-recovery on failures")
     headless_group = parser.add_mutually_exclusive_group()
     headless_group.add_argument("--headless", action="store_true", help="Force headless browser mode")
     headless_group.add_argument("--headed", action="store_true", help="Force headed browser mode")
@@ -753,6 +777,28 @@ def main() -> None:
         browser_overrides["headless"] = True
     if args.headed:
         browser_overrides["headless"] = False
+    if args.browser_channel:
+        browser_overrides["browser_channel"] = args.browser_channel
+    if args.user_data_dir:
+        browser_overrides["user_data_dir"] = args.user_data_dir
+    if args.recordings_dir:
+        browser_overrides["recordings_dir"] = args.recordings_dir
+    if args.event_log_path:
+        browser_overrides["event_log_path"] = args.event_log_path
+    if args.screenshot_on_step:
+        browser_overrides["screenshot_on_step"] = True
+    if args.no_screenshot_on_error:
+        browser_overrides["screenshot_on_error"] = False
+    if args.smart_wait:
+        browser_overrides["smart_wait"] = True
+    if args.no_smart_wait:
+        browser_overrides["smart_wait"] = False
+    if args.overlay:
+        browser_overrides["overlay_enabled"] = True
+    if args.auto_recover:
+        browser_overrides["auto_recover"] = True
+    if args.no_auto_recover:
+        browser_overrides["auto_recover"] = False
     if browser_overrides:
         config = _deep_merge(
             config,

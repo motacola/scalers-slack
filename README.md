@@ -99,11 +99,20 @@ If API keys are not available, enable the browser fallback in `config.json`:
   \"storage_state_path\": \"browser_storage_state.json\",
   \"slack_workspace_id\": \"TBLCQAFEG\",
   \"headless\": false,
+  \"browser_channel\": \"chrome\",
+  \"user_data_dir\": \"./chrome_profile\",
   \"verbose_logging\": false,
   \"keep_open\": false,
   \"interactive_login\": true,
   \"interactive_login_timeout_ms\": 120000,
-  \"auto_save_storage_state\": true
+  \"auto_save_storage_state\": true,
+  \"auto_recover\": true,
+  \"smart_wait\": true,
+  \"overlay_enabled\": false,
+  \"recordings_dir\": \"output/browser_recordings\",
+  \"event_log_path\": \"output/browser_events.jsonl\",
+  \"screenshot_on_step\": false,
+  \"screenshot_on_error\": true
 }
 ```
 
@@ -115,6 +124,11 @@ python -m playwright codegen --save-storage browser_storage_state.json https://a
 Or refresh it interactively during a run:
 ```bash
 python -m src.engine --project <name> --headed --refresh-storage-state
+```
+
+Use Chrome with a persistent profile directory:
+```bash
+python -m src.engine --project <name> --headed --browser-channel chrome --user-data-dir ./chrome_profile
 ```
 
 Run a quick health check:

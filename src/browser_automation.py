@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -247,6 +248,8 @@ class BrowserAutomationConfig:
     headless: bool = True
     slow_mo_ms: int = 0
     timeout_ms: int = 30000
+    browser_channel: str | None = None
+    user_data_dir: str | None = None
     slack_workspace_id: str = ""
     slack_client_url: str = "https://app.slack.com/client"
     slack_api_base_url: str = "https://slack.com/api"
@@ -258,6 +261,17 @@ class BrowserAutomationConfig:
     interactive_login: bool = True
     interactive_login_timeout_ms: int = 120000
     auto_save_storage_state: bool = True
+    auto_recover: bool = True
+    auto_recover_refresh: bool = True
+    smart_wait: bool = True
+    smart_wait_network_idle: bool = True
+    smart_wait_timeout_ms: int = 15000
+    smart_wait_stability_ms: int = 600
+    overlay_enabled: bool = False
+    recordings_dir: str = "output/browser_recordings"
+    event_log_path: str = "output/browser_events.jsonl"
+    screenshot_on_step: bool = False
+    screenshot_on_error: bool = True
 
 
 class BrowserSession:
@@ -276,6 +290,7 @@ class BrowserSession:
             batch_size=100
         )
         self.load_balancer = LoadBalancer(max_workers=5)
+        self._step_counter = 0
 
     def start(self) -> None:
         if self._context:
@@ -297,14 +312,29 @@ class BrowserSession:
             """Recovery action to restart the browser session."""
             self.close()
             self._playwright = sync_playwright().start()
-            self._browser = self._playwright.chromium.launch(
-                headless=self.config.headless,
-                slow_mo=self.config.slow_mo_ms,
-            )
-            context_args: dict[str, Any] = {}
-            if self.config.storage_state_path:
-                context_args["storage_state"] = self.config.storage_state_path
-            self._context = self._browser.new_context(**context_args)
+            launch_args: dict[str, Any] = {
+                "headless": self.config.headless,
+                "slow_mo": self.config.slow_mo_ms,
+            }
+            if self.config.browser_channel:
+                launch_args["channel"] = self.config.browser_channel
+
+            if self.config.user_data_dir:
+                context_args: dict[str, Any] = {}
+                if self.config.storage_state_path:
+                    context_args["storage_state"] = self.config.storage_state_path
+                self._context = self._playwright.chromium.launch_persistent_context(
+                    self.config.user_data_dir,
+                    **launch_args,
+                    **context_args,
+                )
+                self._browser = self._context.browser()
+            else:
+                self._browser = self._playwright.chromium.launch(**launch_args)
+                context_args = {}
+                if self.config.storage_state_path:
+                    context_args["storage_state"] = self.config.storage_state_path
+                self._context = self._browser.new_context(**context_args)
             self._context.set_default_timeout(self.config.timeout_ms)
 
         try:
@@ -318,6 +348,104 @@ class BrowserSession:
             else:
                 logger.error(f"Failed to start browser session after recovery attempts: {e}")
                 raise
+
+    def log_event(self, event: str, detail: dict[str, Any] | None = None) -> None:
+        detail = detail or {}
+        payload = {
+            "ts": time.time(),
+            "event": event,
+            "detail": detail,
+        }
+        try:
+            os.makedirs(os.path.dirname(self.config.event_log_path), exist_ok=True)
+            with open(self.config.event_log_path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload) + "\n")
+        except Exception as exc:
+            logger.warning("Failed to write browser event log: %s", exc)
+
+    def _next_step_id(self) -> str:
+        self._step_counter += 1
+        return f"step_{self._step_counter:04d}"
+
+    def _maybe_screenshot(self, page, label: str) -> None:
+        if not self.config.recordings_dir:
+            return
+        try:
+            os.makedirs(self.config.recordings_dir, exist_ok=True)
+            filename = f"{self._next_step_id()}_{label}.png"
+            path = os.path.join(self.config.recordings_dir, filename)
+            page.screenshot(path=path, full_page=True)
+            if self.config.verbose_logging:
+                logger.info("Saved screenshot %s", path)
+        except Exception as exc:
+            logger.warning("Failed to capture screenshot: %s", exc)
+
+    def _apply_overlay(self, page, text: str) -> None:
+        if not self.config.overlay_enabled:
+            return
+        try:
+            page.evaluate(
+                """
+                (overlayText) => {
+                    const id = '__scalers_overlay__';
+                    let el = document.getElementById(id);
+                    if (!el) {
+                        el = document.createElement('div');
+                        el.id = id;
+                        el.style.position = 'fixed';
+                        el.style.top = '8px';
+                        el.style.right = '8px';
+                        el.style.zIndex = '99999';
+                        el.style.padding = '6px 10px';
+                        el.style.background = 'rgba(20,20,20,0.8)';
+                        el.style.color = '#fff';
+                        el.style.fontSize = '12px';
+                        el.style.fontFamily = 'monospace';
+                        el.style.borderRadius = '6px';
+                        el.style.pointerEvents = 'none';
+                        document.body.appendChild(el);
+                    }
+                    el.textContent = overlayText;
+                }
+                """,
+                text,
+            )
+        except Exception:
+            pass
+
+    def _smart_wait(self, page) -> None:
+        if not self.config.smart_wait:
+            return
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=self.config.smart_wait_timeout_ms)
+        except Exception:
+            return
+        if self.config.smart_wait_network_idle:
+            try:
+                page.wait_for_load_state("networkidle", timeout=self.config.smart_wait_timeout_ms)
+            except Exception:
+                pass
+        stability_ms = max(0, self.config.smart_wait_stability_ms)
+        if stability_ms <= 0:
+            return
+        checks = max(1, int(stability_ms / 200))
+        last_len = None
+        stable = 0
+        for _ in range(checks):
+            try:
+                length = page.evaluate(
+                    "() => document.body && document.body.innerText ? document.body.innerText.length : 0"
+                )
+            except Exception:
+                break
+            if length == last_len:
+                stable += 1
+            else:
+                stable = 0
+            last_len = length
+            time.sleep(0.2)
+        if self.config.verbose_logging:
+            logger.info("Smart wait stability checks=%s stable=%s", checks, stable)
 
     def save_storage_state(self) -> None:
         if not self._context or not self.config.storage_state_path:
@@ -335,9 +463,13 @@ class BrowserSession:
         for attempt in range(self.config.max_retries):
             page = self._context.new_page()
             try:
+                self._apply_overlay(page, "Starting navigation...")
                 if self.config.verbose_logging:
                     logger.info("Navigating to %s (attempt %s)", url, attempt + 1)
                 page.goto(url, wait_until="domcontentloaded", timeout=self.config.timeout_ms)
+                self._smart_wait(page)
+                if self.config.overlay_enabled:
+                    self._apply_overlay(page, f"Loaded {url}")
                 return page
             except Exception as exc:
                 last_error = exc
@@ -354,6 +486,8 @@ class BrowserSession:
         return self._context.request
 
     def close(self) -> None:
+        if self.config.auto_save_storage_state:
+            self.save_storage_state()
         if self._context:
             self._context.close()
             self._context = None
@@ -388,12 +522,28 @@ class SlackBrowserClient:
                 try:
                     if self.config.verbose_logging:
                         logger.info("Running page action for %s (attempt %s)", url, attempt + 1)
+                    self.session._apply_overlay(page, f"Working on {url} ({attempt + 1})")
                     result = func(page)
                     logger.info(f"Page action completed successfully for URL: {url}")
+                    if self.config.screenshot_on_step:
+                        self.session._maybe_screenshot(page, "success")
+                    self.session.log_event("page_action_success", {"url": url})
                     return result
                 except Exception as e:
                     last_error = e
                     logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
+                    self.session.log_event(
+                        "page_action_error",
+                        {"url": url, "attempt": attempt + 1, "error": str(e)},
+                    )
+                    if self.config.screenshot_on_error:
+                        self.session._maybe_screenshot(page, "error")
+                    if self.config.auto_recover and self.config.auto_recover_refresh:
+                        try:
+                            page.reload(wait_until="domcontentloaded", timeout=self.config.timeout_ms)
+                            self.session._smart_wait(page)
+                        except Exception:
+                            pass
                     if retry_on_failure and attempt < self.config.max_retries - 1:
                         time.sleep(self.config.retry_delay_ms / 1000)
                     else:
@@ -644,12 +794,28 @@ class NotionBrowserClient:
                         self._ensure_notion_login(page)
                     if self.config.verbose_logging:
                         logger.info("Running page action for %s (attempt %s)", url, attempt + 1)
+                    self.session._apply_overlay(page, f"Working on {url} ({attempt + 1})")
                     result = func(page)
                     logger.info(f"Page action completed successfully for URL: {url}")
+                    if self.config.screenshot_on_step:
+                        self.session._maybe_screenshot(page, "success")
+                    self.session.log_event("page_action_success", {"url": url})
                     return result
                 except Exception as e:
                     last_error = e
                     logger.error(f"Page action failed for URL {url} (attempt {attempt + 1}): {e}")
+                    self.session.log_event(
+                        "page_action_error",
+                        {"url": url, "attempt": attempt + 1, "error": str(e)},
+                    )
+                    if self.config.screenshot_on_error:
+                        self.session._maybe_screenshot(page, "error")
+                    if self.config.auto_recover and self.config.auto_recover_refresh:
+                        try:
+                            page.reload(wait_until="domcontentloaded", timeout=self.config.timeout_ms)
+                            self.session._smart_wait(page)
+                        except Exception:
+                            pass
                     if retry_on_failure and attempt < self.config.max_retries - 1:
                         time.sleep(self.config.retry_delay_ms / 1000)
                     else:

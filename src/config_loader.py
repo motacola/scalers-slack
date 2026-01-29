@@ -56,6 +56,8 @@ DEFAULT_CONFIG = {
             "headless": True,
             "slow_mo_ms": 0,
             "timeout_ms": 30000,
+            "browser_channel": None,
+            "user_data_dir": None,
             "slack_workspace_id": "",
             "slack_client_url": "https://app.slack.com/client",
             "slack_api_base_url": "https://slack.com/api",
@@ -64,7 +66,18 @@ DEFAULT_CONFIG = {
             "keep_open": False,
             "interactive_login": True,
             "interactive_login_timeout_ms": 120000,
-            "auto_save_storage_state": True
+            "auto_save_storage_state": True,
+            "auto_recover": True,
+            "auto_recover_refresh": True,
+            "smart_wait": True,
+            "smart_wait_network_idle": True,
+            "smart_wait_timeout_ms": 15000,
+            "smart_wait_stability_ms": 600,
+            "overlay_enabled": False,
+            "recordings_dir": "output/browser_recordings",
+            "event_log_path": "output/browser_events.jsonl",
+            "screenshot_on_step": False,
+            "screenshot_on_error": True
         },
         "audit": {
             "enabled": True,
