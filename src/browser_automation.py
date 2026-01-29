@@ -799,9 +799,7 @@ class NotionBrowserClient:
             page = self.session.new_page(url)
             for attempt in range(self.config.max_retries if retry_on_failure else 1):
                 try:
-                    current_url = page.url or ""
-                    if "login" in current_url or "signup" in current_url:
-                        self._ensure_notion_login(page)
+                    self._wait_for_notion_ready(page)
                     if self.config.verbose_logging:
                         logger.info("Running page action for %s (attempt %s)", url, attempt + 1)
                     self.session._apply_overlay(page, f"Working on {url} ({attempt + 1})")
@@ -840,20 +838,31 @@ class NotionBrowserClient:
                 except Exception:
                     pass
 
-    def _ensure_notion_login(self, page) -> None:
-        if not self.config.interactive_login or self.config.headless:
-            raise RuntimeError(
-                "Notion login required. Recreate browser storage state "
-                "with scripts/create_storage_state.py to avoid re-login."
-            )
-        logger.warning(
-            "Notion login required. Complete login in the opened browser window "
-            "(waiting up to %s seconds).",
-            int(self.config.interactive_login_timeout_ms / 1000),
-        )
-        page.wait_for_selector("div[role='main']", timeout=self.config.interactive_login_timeout_ms)
-        if self.config.auto_save_storage_state:
-            self.session.save_storage_state()
+    def _wait_for_notion_ready(self, page) -> None:
+        timeout_s = max(1, int(self.config.interactive_login_timeout_ms / 1000))
+        start = time.time()
+        while time.time() - start < timeout_s:
+            current_url = page.url or ""
+            if "login" in current_url or "signup" in current_url:
+                if not self.config.interactive_login or self.config.headless:
+                    raise RuntimeError(
+                        "Notion login required. Recreate browser storage state "
+                        "with scripts/create_storage_state.py to avoid re-login."
+                    )
+                logger.warning(
+                    "Notion login required. Complete login in the opened browser window "
+                    "(waiting up to %s seconds).",
+                    int(self.config.interactive_login_timeout_ms / 1000),
+                )
+            try:
+                if page.query_selector("div[role='main'], div[data-qa='page-canvas']"):
+                    if self.config.auto_save_storage_state:
+                        self.session.save_storage_state()
+                    return
+            except Exception:
+                pass
+            page.wait_for_timeout(1000)
+        raise RuntimeError("Timed out waiting for Notion to load.")
 
     def _page_url(self, page_id_or_url: str) -> str:
         if page_id_or_url.startswith("http"):
