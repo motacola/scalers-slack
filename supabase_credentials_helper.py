@@ -15,6 +15,7 @@ OR use the Supabase client library instead of the SQL API for better authenticat
 """
 
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()

@@ -1,14 +1,14 @@
-import sys
 import os
-import json
+import sys
 from pathlib import Path
 from time import sleep
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.browser_automation import BrowserSession, BrowserAutomationConfig, SlackBrowserClient
+from src.browser_automation import BrowserAutomationConfig, BrowserSession, SlackBrowserClient
 from src.config_loader import load_config
+
 
 def check_details_browser(users):
     # Load config
@@ -46,7 +46,8 @@ def check_details_browser(users):
                 results = slack_client.search_messages_paginated(query, count=5, max_pages=1)
                 for msg in results:
                     ts = msg.get("ts")
-                    if ts in seen_ts: continue
+                    if ts in seen_ts:
+                        continue
                     seen_ts.add(ts)
                     
                     text = msg.get("text", "") or msg.get("blocks", [{}])[0].get("text", {}).get("text", "")
@@ -70,8 +71,8 @@ def check_details_browser(users):
             
             try:
                 page.wait_for_selector("div[role='main']", timeout=30000)
-                sleep(5) # Wait for rendering
-            except:
+                sleep(5)  # Wait for rendering
+            except Exception:
                 print("Wait timeout, proceeding with whatever is loaded...")
                 
             # Get text content

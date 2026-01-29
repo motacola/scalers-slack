@@ -1,14 +1,13 @@
 import sys
-import os
-import json
 import time
 from pathlib import Path
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.browser_automation import BrowserSession, BrowserAutomationConfig, SlackBrowserClient
+from src.browser_automation import BrowserAutomationConfig, BrowserSession, SlackBrowserClient
 from src.config_loader import load_config
+
 
 def check_channel_history(channel_id="C085B73T2JE"):
     # Load config

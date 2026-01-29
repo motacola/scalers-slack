@@ -25,16 +25,20 @@ def _build_browser_config(settings: dict) -> BrowserAutomationConfig:
 
 def _pick_notion_page_id(config: dict) -> str | None:
     audit = config.get("settings", {}).get("audit", {})
-    if audit.get("notion_audit_page_id"):
-        return audit["notion_audit_page_id"]
-    if audit.get("notion_last_synced_page_id"):
-        return audit["notion_last_synced_page_id"]
+    audit_page_id = audit.get("notion_audit_page_id")
+    if isinstance(audit_page_id, str) and audit_page_id:
+        return audit_page_id
+    last_synced_id = audit.get("notion_last_synced_page_id")
+    if isinstance(last_synced_id, str) and last_synced_id:
+        return last_synced_id
 
     for project in config.get("projects", []):
-        if project.get("notion_audit_page_id"):
-            return project["notion_audit_page_id"]
-        if project.get("notion_last_synced_page_id"):
-            return project["notion_last_synced_page_id"]
+        project_audit_id = project.get("notion_audit_page_id")
+        if isinstance(project_audit_id, str) and project_audit_id:
+            return project_audit_id
+        project_last_synced_id = project.get("notion_last_synced_page_id")
+        if isinstance(project_last_synced_id, str) and project_last_synced_id:
+            return project_last_synced_id
     return None
 
 

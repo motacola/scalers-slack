@@ -14,8 +14,8 @@ from .logging_utils import configure_logging, log_event
 from .models import Thread
 from .notion_client import NotionClient
 from .slack_client import SlackClient
-from .thread_extractor import ThreadExtractor
 from .summarizer import ActivitySummarizer
+from .thread_extractor import ThreadExtractor
 from .ticket_manager import TicketManager
 from .utils import iso_to_unix_ts, make_run_id, utc_now_iso
 

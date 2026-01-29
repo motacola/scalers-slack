@@ -1,8 +1,10 @@
 """Tests for the browser automation module."""
 
-import pytest
 from unittest.mock import MagicMock, patch
-from src.browser_automation import BrowserSession, BrowserAutomationConfig, SlackBrowserClient, NotionBrowserClient
+
+import pytest
+
+from src.browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
 
 
 @pytest.fixture

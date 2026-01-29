@@ -268,7 +268,9 @@ class SlackClient:
             
             for channel in channels:
                 if channel.get("name") == channel_name:
-                    return channel.get("id")
+                    channel_id = channel.get("id")
+                    if isinstance(channel_id, str):
+                        return channel_id
             
             cursor = data.get("response_metadata", {}).get("next_cursor")
             if not cursor:

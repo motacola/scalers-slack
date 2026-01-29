@@ -1,14 +1,13 @@
 import sys
-import os
-import json
 import time
 from pathlib import Path
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.browser_automation import BrowserSession, BrowserAutomationConfig, SlackBrowserClient
+from src.browser_automation import BrowserAutomationConfig, BrowserSession, SlackBrowserClient
 from src.config_loader import load_config
+
 
 def monitor_projects(projects):
     # Load config
@@ -58,7 +57,7 @@ def monitor_projects(projects):
                         time_str = time.strftime('%H:%M', time.localtime(ts))
                         print(f"    - [{time_str}] {user}: {text}...")
                 else:
-                    print(f"   No recent updates found.")
+                    print("   No recent updates found.")
                     
             except Exception as e:
                 print(f"   Error searching for {project}: {e}")

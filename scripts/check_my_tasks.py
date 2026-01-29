@@ -1,16 +1,15 @@
 import sys
-import os
-import json
 import time
 from pathlib import Path
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.browser_automation import BrowserSession, BrowserAutomationConfig, SlackBrowserClient
+from src.browser_automation import BrowserAutomationConfig, BrowserSession, SlackBrowserClient
 from src.config_loader import load_config
 
-def check_my_tasks(user_id="U0A6MGN9S77"): # Christopher Belgrave's ID
+
+def check_my_tasks(user_id="U0A6MGN9S77"):  # Christopher Belgrave's ID
     try:
         app_config = load_config("config.json")
         settings = app_config.get("settings", {})
@@ -53,7 +52,8 @@ def check_my_tasks(user_id="U0A6MGN9S77"): # Christopher Belgrave's ID
                 if results:
                     for msg in results:
                         ts = msg.get("ts")
-                        if ts in seen_ts: continue
+                        if ts in seen_ts:
+                            continue
                         seen_ts.add(ts)
                         
                         text = msg.get("text", "") or " ".join([b.get("type", "") for b in msg.get("blocks", [])])
@@ -63,8 +63,8 @@ def check_my_tasks(user_id="U0A6MGN9S77"): # Christopher Belgrave's ID
                         # Convert TS to readable
                         try:
                             time_obj = time.localtime(float(ts))
-                            time_str = time.strftime('%Y-%m-%d %H:%M', time_obj)
-                        except:
+                            time_str = time.strftime("%Y-%m-%d %H:%M", time_obj)
+                        except (TypeError, ValueError):
                             time_str = str(ts)
                             
                         print(f"   [{time_str}] {user}: {text[:300]}...")

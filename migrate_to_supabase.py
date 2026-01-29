@@ -2,7 +2,7 @@ import json
 import os
 
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client, create_client
 
 # Load environment variables from .env file
 load_dotenv()
@@ -47,7 +47,7 @@ def main():
     
     print("📦 Creating projects table...")
     try:
-        result = supabase.rpc('exec_sql', {'query': create_table_sql}).execute()
+        supabase.rpc("exec_sql", {"query": create_table_sql}).execute()
         print("✓ Table created/verified")
     except Exception as e:
         # Table might already exist or we might need to use a different approach
@@ -80,7 +80,7 @@ def main():
         
         try:
             # Use upsert to insert or update if exists
-            result = supabase.table('projects').upsert(
+            supabase.table('projects').upsert(
                 project_data,
                 on_conflict='name'
             ).execute()
@@ -91,7 +91,7 @@ def main():
             print(f"✗ Error syncing {project_data['name']}: {e}")
             error_count += 1
 
-    print(f"\n✅ Migration complete!")
+    print("\n✅ Migration complete!")
     print(f"   ✓ Success: {success_count}")
     if error_count > 0:
         print(f"   ✗ Errors: {error_count}")

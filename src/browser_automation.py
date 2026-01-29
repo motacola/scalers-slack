@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Callable, cast
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class LoadBalancer:
     
     def __init__(self, max_workers: int = 5):
         self.max_workers = max_workers
-        self.workers = []
+        self.workers: list[str] = []
         self.active_workers = 0
     
     def add_worker(self, worker_id: str):
@@ -135,7 +135,7 @@ class PerformanceMonitor:
         """Start monitoring a sync operation."""
         self.start_time = time.time()
     
-    def stop_monitoring(self, success: bool, operation_name: str = None):
+    def stop_monitoring(self, success: bool, operation_name: str | None = None):
         """Stop monitoring a sync operation and record metrics.
         
         Args:
@@ -176,7 +176,7 @@ class PerformanceMonitor:
         Returns:
             list: A list of dictionaries containing bottleneck information.
         """
-        return self.metrics["bottlenecks"]
+        return cast(list[dict[str, Any]], self.metrics["bottlenecks"])
     
     def reset(self):
         """Reset all performance metrics."""
@@ -199,7 +199,7 @@ class RecoveryManager:
         self.retry_delay_ms = retry_delay_ms
         self.recovery_attempts = 0
     
-    def handle_failure(self, error: Exception, recovery_action: callable) -> bool:
+    def handle_failure(self, error: Exception, recovery_action: Callable[[], None]) -> bool:
         """Attempt to recover from a failure by executing a recovery action.
         
         Args:
@@ -382,7 +382,7 @@ class SlackBrowserClient:
 
             status = response.status
             try:
-                data = cast(dict[str, Any], response.json())
+                data: Any = response.json()
             except Exception:
                 data = {}
 
@@ -406,7 +406,7 @@ class SlackBrowserClient:
                 raise RuntimeError("Slack API error (browser): invalid response")
 
             logger.info(f"Slack API call successful: {endpoint}")
-            return data
+            return cast(dict[str, Any], data)
         except Exception as e:
             logger.error(f"Failed to execute Slack API call: {e}")
             raise

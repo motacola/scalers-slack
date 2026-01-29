@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from typing import cast
 from datetime import datetime, timezone
 
 
@@ -187,7 +188,9 @@ class AuditLogger:
                     "SELECT real_name, display_name FROM users WHERE user_id = ? LIMIT 1", (user_id,)
                 ).fetchone()
             if row:
-                return row[0] or row[1]
+                real_name = cast(str | None, row[0])
+                display_name = cast(str | None, row[1])
+                return real_name or display_name
         except sqlite3.Error:
             self._db_initialized = False
         return None
