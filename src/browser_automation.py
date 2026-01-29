@@ -299,7 +299,8 @@ class BrowserSession:
             logger.error("Playwright is not installed. Install it to use browser automation fallback.")
             raise RuntimeError("Playwright is not installed. Install it to use browser automation fallback.")
         if (
-            self.config.storage_state_path
+            not self.config.user_data_dir
+            and self.config.storage_state_path
             and not os.path.exists(self.config.storage_state_path)
             and (self.config.headless or not self.config.interactive_login)
         ):
@@ -321,14 +322,18 @@ class BrowserSession:
 
             if self.config.user_data_dir:
                 context_args: dict[str, Any] = {}
-                if self.config.storage_state_path:
-                    context_args["storage_state"] = self.config.storage_state_path
+                if self.config.storage_state_path and self.config.verbose_logging:
+                    logger.info(
+                        "Ignoring storage_state_path because user_data_dir is set (%s).",
+                        self.config.user_data_dir,
+                    )
                 self._context = self._playwright.chromium.launch_persistent_context(
                     self.config.user_data_dir,
                     **launch_args,
                     **context_args,
                 )
-                self._browser = self._context.browser()
+                browser_attr = getattr(self._context, "browser", None)
+                self._browser = browser_attr() if callable(browser_attr) else browser_attr
             else:
                 self._browser = self._playwright.chromium.launch(**launch_args)
                 context_args = {}
