@@ -12,6 +12,7 @@
     "slack": {
       "token_env": "SLACK_BOT_TOKEN",
       "base_url": "https://slack.com/api",
+      "workspace_domain": "quickerleads.slack.com",
       "default_channel_id": "",
       "pagination": {
         "history_limit": 200,
@@ -108,6 +109,9 @@
     "logging": {
       "json": true,
       "level": "INFO"
+    },
+    "user": {
+      "email": "christopher@servicescalers.com"
     }
   },
   "projects": [
