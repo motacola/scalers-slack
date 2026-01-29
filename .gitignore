@@ -4,3 +4,7 @@ __pycache__/
 audit/
 browser_storage_state.json
 .env
+chrome_profile/
+output/browser_events.jsonl
+output/notion_builds.txt
+output/notion_tickets.txt
