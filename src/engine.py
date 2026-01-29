@@ -54,17 +54,27 @@ def _effective_feature(feature_settings: dict, project: dict, key: str) -> bool:
     return _coerce_bool(project_value, True)
 
 
+def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
 class ScalersSlackEngine:
     def __init__(
         self,
         config_path: str = "config.json",
+        config: dict[str, Any] | None = None,
         slack_client: SlackClient | None = None,
         notion_client: NotionClient | None = None,
         audit_logger: AuditLogger | None = None,
         thread_extractor: ThreadExtractor | None = None,
     ):
         self.base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.config = load_config(config_path)
+        self.config = config or load_config(config_path)
 
         logging_settings = self.config.get("settings", {}).get("logging", {})
         logging_json = bool(logging_settings.get("json", True))
@@ -92,6 +102,12 @@ class ScalersSlackEngine:
             slack_api_base_url=browser_settings.get("slack_api_base_url", "https://slack.com/api"),
             notion_base_url=browser_settings.get("notion_base_url", "https://www.notion.so"),
             verbose_logging=browser_settings.get("verbose_logging", False),
+            keep_open=browser_settings.get("keep_open", False),
+            interactive_login=browser_settings.get("interactive_login", True),
+            interactive_login_timeout_ms=_coerce_int(
+                browser_settings.get("interactive_login_timeout_ms"), 120000
+            ),
+            auto_save_storage_state=browser_settings.get("auto_save_storage_state", True),
         )
         slack_token = os.getenv(slack_settings.get("token_env", "SLACK_BOT_TOKEN"))
         notion_token = os.getenv(notion_settings.get("token_env", "NOTION_API_KEY"))
@@ -103,7 +119,11 @@ class ScalersSlackEngine:
         needs_browser = browser_config.enabled and (not slack_token or not notion_token)
         self.browser_enabled = needs_browser
         if needs_browser:
-            if browser_config.storage_state_path and not os.path.exists(browser_config.storage_state_path):
+            if (
+                browser_config.storage_state_path
+                and not os.path.exists(browser_config.storage_state_path)
+                and (browser_config.headless or not browser_config.interactive_login)
+            ):
                 raise RuntimeError(
                     "Browser automation is enabled but storage_state_path is missing. "
                     "Create it with Playwright or disable browser_automation."
@@ -674,6 +694,9 @@ class ScalersSlackEngine:
     def close(self) -> None:
         if not self.browser_session:
             return
+        if self.browser_config.keep_open:
+            logger.info("Keeping browser session open (keep_open enabled).")
+            return
         try:
             self.browser_session.close()
         except Exception:
@@ -692,6 +715,20 @@ def main() -> None:
     parser.add_argument("--summarize", action="store_true", help="Generate an AI standup report")
     parser.add_argument("--update-tickets", action="store_true", help="Update Notion tickets with project activity")
     parser.add_argument("--concurrency", type=int, default=1, help="Number of projects to sync in parallel")
+    parser.add_argument("--verbose-browser", action="store_true", help="Enable verbose browser logging")
+    parser.add_argument(
+        "--keep-browser-open",
+        action="store_true",
+        help="Keep the browser session open after the run (useful for debugging)",
+    )
+    parser.add_argument(
+        "--refresh-storage-state",
+        action="store_true",
+        help="Allow interactive login to refresh browser storage state",
+    )
+    headless_group = parser.add_mutually_exclusive_group()
+    headless_group.add_argument("--headless", action="store_true", help="Force headless browser mode")
+    headless_group.add_argument("--headed", action="store_true", help="Force headed browser mode")
 
     args = parser.parse_args()
     if args.validate_config:
@@ -704,7 +741,25 @@ def main() -> None:
         parser.error("Either --project, --all, or --summarize is required unless --validate-config is used")
 
     config = load_config(args.config)
-    engine = ScalersSlackEngine(config_path=args.config)
+    browser_overrides: dict[str, Any] = {}
+    if args.verbose_browser:
+        browser_overrides["verbose_logging"] = True
+    if args.keep_browser_open:
+        browser_overrides["keep_open"] = True
+    if args.refresh_storage_state:
+        browser_overrides["interactive_login"] = True
+        browser_overrides["auto_save_storage_state"] = True
+    if args.headless:
+        browser_overrides["headless"] = True
+    if args.headed:
+        browser_overrides["headless"] = False
+    if browser_overrides:
+        config = _deep_merge(
+            config,
+            {"settings": {"browser_automation": browser_overrides}},
+        )
+
+    engine = ScalersSlackEngine(config_path=args.config, config=config)
     try:
         if args.summarize:
             report_prompt = engine.run_summarize(since=args.since, concurrency=args.concurrency)

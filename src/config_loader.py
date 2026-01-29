@@ -60,7 +60,11 @@ DEFAULT_CONFIG = {
             "slack_client_url": "https://app.slack.com/client",
             "slack_api_base_url": "https://slack.com/api",
             "notion_base_url": "https://www.notion.so",
-            "verbose_logging": False
+            "verbose_logging": False,
+            "keep_open": False,
+            "interactive_login": True,
+            "interactive_login_timeout_ms": 120000,
+            "auto_save_storage_state": True
         },
         "audit": {
             "enabled": True,

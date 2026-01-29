@@ -254,6 +254,10 @@ class BrowserAutomationConfig:
     max_retries: int = 3
     retry_delay_ms: int = 1000
     verbose_logging: bool = False
+    keep_open: bool = False
+    interactive_login: bool = True
+    interactive_login_timeout_ms: int = 120000
+    auto_save_storage_state: bool = True
 
 
 class BrowserSession:
@@ -279,7 +283,11 @@ class BrowserSession:
         if sync_playwright is None:
             logger.error("Playwright is not installed. Install it to use browser automation fallback.")
             raise RuntimeError("Playwright is not installed. Install it to use browser automation fallback.")
-        if self.config.storage_state_path and not os.path.exists(self.config.storage_state_path):
+        if (
+            self.config.storage_state_path
+            and not os.path.exists(self.config.storage_state_path)
+            and (self.config.headless or not self.config.interactive_login)
+        ):
             raise RuntimeError(
                 "Browser storage state not found. "
                 "Create it with scripts/create_storage_state.py to avoid re-login."
@@ -310,6 +318,16 @@ class BrowserSession:
             else:
                 logger.error(f"Failed to start browser session after recovery attempts: {e}")
                 raise
+
+    def save_storage_state(self) -> None:
+        if not self._context or not self.config.storage_state_path:
+            return
+        try:
+            self._context.storage_state(path=self.config.storage_state_path)
+            if self.config.verbose_logging:
+                logger.info("Saved browser storage state to %s", self.config.storage_state_path)
+        except Exception as exc:
+            logger.warning("Failed to save browser storage state: %s", exc)
 
     def new_page(self, url: str):
         self.start()
@@ -476,7 +494,50 @@ class SlackBrowserClient:
         token = self._with_page(self._slack_client_home(), action)
         if isinstance(token, str) and token:
             self._web_token = token
+            return self._web_token
+
+        if self.config.interactive_login and not self.config.headless:
+            token = self._interactive_login_slack()
+            if isinstance(token, str) and token:
+                self._web_token = token
         return self._web_token
+
+    def _interactive_login_slack(self) -> str | None:
+        page = self.session.new_page(self._slack_client_home())
+        try:
+            logger.warning(
+                "Slack login required. Complete login in the opened browser window "
+                "(waiting up to %s seconds).",
+                int(self.config.interactive_login_timeout_ms / 1000),
+            )
+            handle = page.wait_for_function(
+                """
+                () => {
+                    const raw = localStorage.getItem('localConfig_v2') || localStorage.getItem('localConfig');
+                    if (!raw) return null;
+                    let parsed = null;
+                    try { parsed = JSON.parse(raw); } catch (e) { return null; }
+                    const teams = parsed && parsed.teams ? parsed.teams : null;
+                    if (!teams) return null;
+                    const firstTeam = Object.values(teams)[0];
+                    return firstTeam && firstTeam.token ? firstTeam.token : null;
+                }
+                """,
+                timeout=self.config.interactive_login_timeout_ms,
+            )
+            token = handle.json_value()
+            if isinstance(token, str) and token:
+                if self.config.auto_save_storage_state:
+                    self.session.save_storage_state()
+                return token
+        except Exception as exc:
+            logger.error("Slack interactive login failed: %s", exc)
+        finally:
+            try:
+                page.close()
+            except Exception:
+                pass
+        return None
 
     def fetch_channel_history_paginated(
         self,
@@ -580,10 +641,7 @@ class NotionBrowserClient:
                 try:
                     current_url = page.url or ""
                     if "login" in current_url or "signup" in current_url:
-                        raise RuntimeError(
-                            "Notion login required. Recreate browser storage state "
-                            "with scripts/create_storage_state.py to avoid re-login."
-                        )
+                        self._ensure_notion_login(page)
                     if self.config.verbose_logging:
                         logger.info("Running page action for %s (attempt %s)", url, attempt + 1)
                     result = func(page)
@@ -605,6 +663,21 @@ class NotionBrowserClient:
                     page.close()
                 except Exception:
                     pass
+
+    def _ensure_notion_login(self, page) -> None:
+        if not self.config.interactive_login or self.config.headless:
+            raise RuntimeError(
+                "Notion login required. Recreate browser storage state "
+                "with scripts/create_storage_state.py to avoid re-login."
+            )
+        logger.warning(
+            "Notion login required. Complete login in the opened browser window "
+            "(waiting up to %s seconds).",
+            int(self.config.interactive_login_timeout_ms / 1000),
+        )
+        page.wait_for_selector("div[role='main']", timeout=self.config.interactive_login_timeout_ms)
+        if self.config.auto_save_storage_state:
+            self.session.save_storage_state()
 
     def _page_url(self, page_id_or_url: str) -> str:
         if page_id_or_url.startswith("http"):
