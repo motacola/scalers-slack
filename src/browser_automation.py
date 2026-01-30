@@ -273,6 +273,7 @@ class BrowserAutomationConfig:
     smart_wait_stability_ms: int = 600
     overlay_enabled: bool = False
     recordings_dir: str = "output/browser_recordings"
+    html_snapshot_on_error: bool = True
     event_log_path: str = "output/browser_events.jsonl"
     screenshot_on_step: bool = False
     screenshot_on_error: bool = True
@@ -390,6 +391,21 @@ class BrowserSession:
                 logger.info("Saved screenshot %s", path)
         except Exception as exc:
             logger.warning("Failed to capture screenshot: %s", exc)
+
+    def _maybe_dom_snapshot(self, page, label: str) -> None:
+        if not self.config.recordings_dir or not self.config.html_snapshot_on_error:
+            return
+        try:
+            os.makedirs(self.config.recordings_dir, exist_ok=True)
+            filename = f"{self._next_step_id()}_{label}.html"
+            path = os.path.join(self.config.recordings_dir, filename)
+            content = page.content()
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(content)
+            if self.config.verbose_logging:
+                logger.info("Saved DOM snapshot %s", path)
+        except Exception as exc:
+            logger.warning("Failed to capture DOM snapshot: %s", exc)
 
     def _apply_overlay(self, page, text: str) -> None:
         if not self.config.overlay_enabled:
@@ -549,6 +565,7 @@ class SlackBrowserClient:
                     )
                     if self.config.screenshot_on_error:
                         self.session._maybe_screenshot(page, "error")
+                    self.session._maybe_dom_snapshot(page, "error")
                     if self.config.auto_recover and self.config.auto_recover_refresh:
                         try:
                             page.reload(wait_until="domcontentloaded", timeout=self.config.timeout_ms)
@@ -578,54 +595,64 @@ class SlackBrowserClient:
     ) -> dict[str, Any]:
         base_url = f"{self.config.slack_api_base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         url = f"{base_url}?{urlencode(params or {})}" if params else base_url
-        token = self._get_web_token()
-        if not token:
-            raise RuntimeError(
-                "Slack web token not found. Recreate browser storage state "
-                "with scripts/create_storage_state.py to avoid re-login."
-            )
-        headers = {"Content-Type": "application/json; charset=utf-8"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
         request = self.session.request()
-        try:
-            if method.upper() == "GET":
-                response = request.get(url, headers=headers)
-            else:
-                payload = json.dumps(body or {})
-                response = request.fetch(url, method=method, headers=headers, data=payload)
+        last_error: Exception | None = None
 
-            status = response.status
+        for attempt in range(2):
+            token = self._get_web_token()
+            if not token:
+                raise RuntimeError(
+                    "Slack web token not found. Recreate browser storage state "
+                    "with scripts/create_storage_state.py to avoid re-login."
+                )
+            headers = {"Content-Type": "application/json; charset=utf-8", "Authorization": f"Bearer {token}"}
             try:
-                data: Any = response.json()
-            except Exception:
-                data = {}
+                if method.upper() == "GET":
+                    response = request.get(url, headers=headers)
+                else:
+                    payload = json.dumps(body or {})
+                    response = request.fetch(url, method=method, headers=headers, data=payload)
 
-            self.stats["api_calls"] += 1
-            if status == 429:
-                self.stats["rate_limit_hits"] += 1
-                logger.warning(f"Rate limit hit for Slack API endpoint: {endpoint}")
+                status = response.status
+                try:
+                    data: Any = response.json()
+                except Exception:
+                    data = {}
 
-            if status and status >= 400:
-                error = data.get("error") if isinstance(data, dict) else "unknown_error"
-                logger.error(f"Slack API error (browser): {status} {error}")
-                raise RuntimeError(f"Slack API error (browser): {status} {error}")
+                self.stats["api_calls"] += 1
+                if status == 429:
+                    self.stats["rate_limit_hits"] += 1
+                    logger.warning(f"Rate limit hit for Slack API endpoint: {endpoint}")
 
-            if isinstance(data, dict) and not data.get("ok", True):
-                error_msg = data.get('error', 'unknown_error')
-                logger.error(f"Slack API error (browser): {error_msg}")
-                raise RuntimeError(f"Slack API error (browser): {error_msg}")
+                if self._is_auth_error(status, data) and attempt == 0:
+                    logger.warning("Slack auth failed; refreshing web token and retrying.")
+                    self._refresh_web_token()
+                    continue
 
-            if not isinstance(data, dict):
-                logger.error("Slack API error (browser): invalid response")
-                raise RuntimeError("Slack API error (browser): invalid response")
+                if status and status >= 400:
+                    error = data.get("error") if isinstance(data, dict) else "unknown_error"
+                    logger.error(f"Slack API error (browser): {status} {error}")
+                    raise RuntimeError(f"Slack API error (browser): {status} {error}")
 
-            logger.info(f"Slack API call successful: {endpoint}")
-            return cast(dict[str, Any], data)
-        except Exception as e:
-            logger.error(f"Failed to execute Slack API call: {e}")
-            raise
+                if isinstance(data, dict) and not data.get("ok", True):
+                    error_msg = data.get("error", "unknown_error")
+                    logger.error(f"Slack API error (browser): {error_msg}")
+                    raise RuntimeError(f"Slack API error (browser): {error_msg}")
+
+                if not isinstance(data, dict):
+                    logger.error("Slack API error (browser): invalid response")
+                    raise RuntimeError("Slack API error (browser): invalid response")
+
+                logger.info(f"Slack API call successful: {endpoint}")
+                return cast(dict[str, Any], data)
+            except Exception as e:
+                last_error = e
+                logger.error(f"Failed to execute Slack API call: {e}")
+                if attempt >= 1:
+                    raise
+        if last_error:
+            raise last_error
+        raise RuntimeError("Slack API call failed")
 
     def _get_web_token(self) -> str | None:
         if self._web_token:
@@ -678,6 +705,24 @@ class SlackBrowserClient:
             if isinstance(token, str) and token:
                 self._web_token = token
         return self._web_token
+
+    def _is_auth_error(self, status: int | None, data: Any) -> bool:
+        auth_errors = {"not_authed", "invalid_auth", "token_revoked", "account_inactive", "token_expired"}
+        if status in {401, 403}:
+            return True
+        if isinstance(data, dict):
+            return data.get("error") in auth_errors
+        return False
+
+    def _refresh_web_token(self) -> str | None:
+        previous = self._web_token
+        self._web_token = None
+        token = self._get_web_token()
+        if token and token != previous:
+            logger.info("Slack web token refreshed.")
+            if self.config.auto_save_storage_state:
+                self.session.save_storage_state()
+        return token
 
     def _interactive_login_slack(self) -> str | None:
         page = self.session.new_page(self._slack_client_home())
@@ -791,6 +836,10 @@ class SlackBrowserClient:
 class NotionBrowserClient:
     supports_verification = False
     supports_last_synced_update = True
+    MAIN_SELECTOR = "div[role='main']"
+    PAGE_CANVAS_SELECTOR = "div[data-qa='page-canvas']"
+    READY_SELECTORS = "div[role='main'], div[data-qa='page-canvas']"
+    CONTENT_EDITABLE_SELECTOR = "div[contenteditable='true']"
 
     def __init__(self, session: BrowserSession, config: BrowserAutomationConfig):
         self.session = session
@@ -824,6 +873,7 @@ class NotionBrowserClient:
                     )
                     if self.config.screenshot_on_error:
                         self.session._maybe_screenshot(page, "error")
+                    self.session._maybe_dom_snapshot(page, "error")
                     if self.config.auto_recover and self.config.auto_recover_refresh:
                         try:
                             page.reload(wait_until="domcontentloaded", timeout=self.config.timeout_ms)
@@ -861,7 +911,7 @@ class NotionBrowserClient:
                     int(self.config.interactive_login_timeout_ms / 1000),
                 )
             try:
-                if page.query_selector("div[role='main'], div[data-qa='page-canvas']"):
+                if page.query_selector(self.READY_SELECTORS):
                     if self.config.auto_save_storage_state:
                         self.session.save_storage_state()
                     return
@@ -880,10 +930,10 @@ class NotionBrowserClient:
 
         def action(page):
             page.wait_for_timeout(1500)
-            page.wait_for_selector("div[role='main']", timeout=15000)
-            editor = page.locator("div[role='main'] div[contenteditable='true']").last
+            page.wait_for_selector(self.MAIN_SELECTOR, timeout=15000)
+            editor = page.locator(f"{self.MAIN_SELECTOR} {self.CONTENT_EDITABLE_SELECTOR}").last
             if editor.count() == 0:
-                editor = page.locator("div[contenteditable='true']").last
+                editor = page.locator(self.CONTENT_EDITABLE_SELECTOR).last
             editor.click(timeout=15000)
             page.keyboard.type(text)
             page.keyboard.press("Enter")
@@ -944,7 +994,7 @@ class NotionBrowserClient:
             if "login" in current_url or "signup" in current_url:
                 return False
             try:
-                page.wait_for_selector("div[role='main']", timeout=10000)
+                page.wait_for_selector(self.MAIN_SELECTOR, timeout=10000)
             except Exception:
                 return False
             return True

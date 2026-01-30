@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import os
 import sys
@@ -75,6 +76,8 @@ class ScalersSlackEngine:
     ):
         self.base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.config = config or load_config(config_path)
+        self.last_run_summary: dict[str, Any] | None = None
+        self._channel_cache: dict[str, dict[str, Any]] = {}
 
         logging_settings = self.config.get("settings", {}).get("logging", {})
         logging_json = bool(logging_settings.get("json", True))
@@ -118,6 +121,7 @@ class ScalersSlackEngine:
             smart_wait_stability_ms=_coerce_int(browser_settings.get("smart_wait_stability_ms"), 600),
             overlay_enabled=browser_settings.get("overlay_enabled", False),
             recordings_dir=browser_settings.get("recordings_dir", "output/browser_recordings"),
+            html_snapshot_on_error=browser_settings.get("html_snapshot_on_error", True),
             event_log_path=browser_settings.get("event_log_path", "output/browser_events.jsonl"),
             screenshot_on_step=browser_settings.get("screenshot_on_step", False),
             screenshot_on_error=browser_settings.get("screenshot_on_error", True),
@@ -200,7 +204,8 @@ class ScalersSlackEngine:
         since: str | None = None,
         query: str | None = None,
         dry_run: bool = False,
-    ) -> None:
+    ) -> dict[str, Any] | None:
+        run_started = time.monotonic()
         project = get_project(self.config, project_name)
         if not project:
             raise RuntimeError(f"Project '{project_name}' not found in config.json")
@@ -213,6 +218,15 @@ class ScalersSlackEngine:
         sync_timestamp = utc_now_iso()
         run_date = sync_timestamp.split("T")[0]
         run_id = make_run_id(project_name, since, query, run_date)
+        run_summary: dict[str, Any] = {
+            "project": project_name,
+            "run_id": run_id,
+            "since": since,
+            "query": query,
+            "dry_run": dry_run,
+            "browser_enabled": self.browser_enabled,
+            "status": "started",
+        }
 
         enable_audit = _effective_feature(self.feature_settings, project, "enable_audit")
         enable_notion_audit_note = _effective_feature(self.feature_settings, project, "enable_notion_audit_note")
@@ -267,6 +281,14 @@ class ScalersSlackEngine:
             slack_duration_ms = int((time.monotonic() - slack_start) * 1000)
             slack_stats = self._get_client_stats(self.slack)
             pagination_stats = self._get_pagination_stats(self.slack)
+            run_summary.update(
+                {
+                    "thread_count": len(threads),
+                    "slack_duration_ms": slack_duration_ms,
+                    "pagination": pagination_stats,
+                    "slack_stats": slack_stats,
+                }
+            )
 
             log_event(
                 logger,
@@ -296,7 +318,19 @@ class ScalersSlackEngine:
                 },
             )
 
+            audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
+            last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get(
+                "notion_last_synced_page_id"
+            )
+
             if dry_run:
+                run_summary["status"] = "dry_run"
+                run_summary["preview"] = self._format_thread_preview(threads)
+                run_summary["planned_actions"] = {
+                    "notion_audit_note": bool(enable_notion_audit_note and audit_note_page and not skip_notion),
+                    "notion_last_synced": bool(enable_notion_last_synced and last_synced_page and not skip_notion),
+                    "slack_topic_update": bool(enable_slack_topic_update),
+                }
                 self.audit.log(action, "dry_run", {"count": len(threads), "project": project_name})
                 log_event(
                     logger,
@@ -307,21 +341,17 @@ class ScalersSlackEngine:
                     thread_count=len(threads),
                     json_enabled=self.json_logging,
                 )
-                return
+                return run_summary
 
             notion_written = False
             if not skip_notion:
                 if hasattr(self.notion, "reset_stats"):
                     self.notion.reset_stats()
-                audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
                 if enable_notion_audit_note and audit_note_page:
                     note_text = self._build_audit_note(project_name, sync_timestamp, threads, run_id, channel_id)
                     self._write_notion_audit_note(note_text, audit_note_page, run_id)
                     notion_written = True
 
-                last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get(
-                    "notion_last_synced_page_id"
-                )
                 if enable_notion_last_synced and last_synced_page:
                     property_name = self.audit_settings.get("notion_last_synced_property", "Last Synced")
                     self._update_notion_last_synced(last_synced_page, property_name, sync_timestamp, run_id)
@@ -334,10 +364,13 @@ class ScalersSlackEngine:
                         status="notion_written",
                         details={"since": since, "query": query},
                     )
+            run_summary["notion_written"] = notion_written
+            run_summary["notion_stats"] = self._get_client_stats(self.notion)
 
             if enable_slack_topic_update:
                 slack_topic_start = time.monotonic()
                 self._update_slack_last_synced(channel_id, sync_timestamp)
+                run_summary["slack_topic_updated"] = True
                 log_event(
                     logger,
                     action="slack_topic_update",
@@ -347,6 +380,8 @@ class ScalersSlackEngine:
                     duration_ms=int((time.monotonic() - slack_topic_start) * 1000),
                     json_enabled=self.json_logging,
                 )
+            else:
+                run_summary["slack_topic_updated"] = False
 
             self.audit.log(action, "completed", {"project": project_name, "threads": len(threads), "run_id": run_id})
             log_event(
@@ -358,7 +393,18 @@ class ScalersSlackEngine:
                 thread_count=len(threads),
                 json_enabled=self.json_logging,
             )
+            run_summary["status"] = "completed"
+            return run_summary
+        except Exception as exc:
+            run_summary["status"] = "failed"
+            run_summary["error"] = str(exc)
+            raise
         finally:
+            run_summary["duration_ms"] = int((time.monotonic() - run_started) * 1000)
+            report_path = self._write_run_report(run_summary)
+            if report_path:
+                run_summary["report_path"] = report_path
+            self.last_run_summary = run_summary
             if previous_audit_enabled != enable_audit:
                 self.audit.enabled = previous_audit_enabled
 
@@ -391,6 +437,42 @@ class ScalersSlackEngine:
             lines.append("- No threads collected")
 
         return "\n".join(header + ["Top threads:"] + lines)
+
+    def _format_thread_preview(self, threads: list[Thread], limit: int = 5) -> list[dict[str, Any]]:
+        preview_items = []
+        for thread in threads[:limit]:
+            user_name = self._resolve_user_name(thread.user_id) if thread.user_id else "unknown"
+            preview_items.append(
+                {
+                    "thread_ts": thread.thread_ts,
+                    "created_at": thread.created_at,
+                    "user": user_name,
+                    "text": thread.preview(120).replace("\n", " "),
+                    "permalink": thread.permalink,
+                }
+            )
+        return preview_items
+
+    def _write_run_report(self, summary: dict[str, Any]) -> str | None:
+        settings = self.config.get("settings", {})
+        logging_settings = settings.get("logging", {}) if isinstance(settings, dict) else {}
+        report_dir = logging_settings.get("run_report_dir", "output/run_reports")
+        if not report_dir:
+            return None
+        run_id = summary.get("run_id")
+        if not run_id:
+            return None
+        full_dir = os.path.join(self.base_path, report_dir)
+        try:
+            os.makedirs(full_dir, exist_ok=True)
+            filename = f"{run_id}.json"
+            path = os.path.join(full_dir, filename)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(summary, ensure_ascii=True, indent=2))
+            return path
+        except OSError as exc:
+            logger.warning("Failed to write run report: %s", exc)
+            return None
 
     def _write_notion_audit_note(self, note_text: str, page_id: str, run_id: str) -> None:
         action = "notion_audit_note"
@@ -558,7 +640,7 @@ class ScalersSlackEngine:
         topic = f"Last Synced: {sync_timestamp}"
         try:
             self.slack.update_channel_topic(channel_id, topic)
-            channel = self.slack.get_channel_info(channel_id)
+            channel = self._get_channel_info(channel_id)
             current_topic = channel.get("topic", {}).get("value")
             if current_topic != topic:
                 self.audit.log_review(
@@ -574,10 +656,19 @@ class ScalersSlackEngine:
 
     def _get_channel_name(self, channel_id: str) -> str | None:
         try:
-            info = self.slack.get_channel_info(channel_id)
+            info = self._get_channel_info(channel_id)
         except Exception:
             return None
         return info.get("name") or info.get("name_normalized")
+
+    def _get_channel_info(self, channel_id: str) -> dict[str, Any]:
+        cached = self._channel_cache.get(channel_id)
+        if cached:
+            return cached
+        info = self.slack.get_channel_info(channel_id)
+        if isinstance(info, dict):
+            self._channel_cache[channel_id] = info
+        return info
 
     def _get_client_stats(self, client: object) -> dict[str, Any]:
         if hasattr(client, "get_stats"):
@@ -745,6 +836,7 @@ def main() -> None:
     parser.add_argument("--event-log-path", help="Path for browser event log (JSONL)")
     parser.add_argument("--screenshot-on-step", action="store_true", help="Screenshot after successful actions")
     parser.add_argument("--no-screenshot-on-error", action="store_true", help="Disable screenshots on errors")
+    parser.add_argument("--no-html-snapshot-on-error", action="store_true", help="Disable HTML snapshots on errors")
     parser.add_argument("--smart-wait", action="store_true", help="Enable smart wait for page stability")
     parser.add_argument("--no-smart-wait", action="store_true", help="Disable smart wait for page stability")
     parser.add_argument("--overlay", action="store_true", help="Show browser status overlay")
@@ -789,6 +881,8 @@ def main() -> None:
         browser_overrides["screenshot_on_step"] = True
     if args.no_screenshot_on_error:
         browser_overrides["screenshot_on_error"] = False
+    if args.no_html_snapshot_on_error:
+        browser_overrides["html_snapshot_on_error"] = False
     if args.smart_wait:
         browser_overrides["smart_wait"] = True
     if args.no_smart_wait:
@@ -833,18 +927,35 @@ def main() -> None:
             print("No projects to run.")
             return
 
-        def sync_one(p_name: str) -> None:
+        def sync_one(p_name: str) -> dict[str, Any] | None:
             try:
-                engine.run_sync(project_name=p_name, since=args.since, query=args.query, dry_run=args.dry_run)
+                return engine.run_sync(project_name=p_name, since=args.since, query=args.query, dry_run=args.dry_run)
             except Exception as exc:
                 print(f"Error syncing project '{p_name}': {exc}", file=sys.stderr)
+                return None
+
+        def print_summary(summary: dict[str, Any]) -> None:
+            project = summary.get("project", "unknown")
+            status = summary.get("status", "unknown")
+            threads = summary.get("thread_count", 0)
+            duration = summary.get("duration_ms", 0)
+            report_path = summary.get("report_path")
+            line = f"[{project}] status={status} threads={threads} duration_ms={duration}"
+            if report_path:
+                line += f" report={report_path}"
+            print(line)
 
         if args.concurrency > 1 and len(projects_to_run) > 1:
             with ThreadPoolExecutor(max_workers=args.concurrency) as executor:
-                executor.map(sync_one, projects_to_run)
+                results = executor.map(sync_one, projects_to_run)
+                for summary in results:
+                    if summary:
+                        print_summary(summary)
         else:
             for project_name in projects_to_run:
-                sync_one(project_name)
+                summary = sync_one(project_name)
+                if summary:
+                    print_summary(summary)
     finally:
         engine.close()
 

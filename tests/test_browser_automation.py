@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, mock_open, patch
 
+import os
+
 import pytest
 
 from src.browser_automation import (
@@ -112,6 +114,27 @@ def test_slack_api_call_failure(mock_browser_session, browser_config):
         assert "Slack API error (browser): 404 channel_not_found" in str(exc_info.value)
 
 
+def test_slack_api_call_retries_on_auth_error(mock_browser_session, browser_config):
+    """Test that auth errors trigger a token refresh and retry."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    mock_request = MagicMock()
+    mock_response1 = MagicMock()
+    mock_response1.status = 200
+    mock_response1.json.return_value = {"ok": False, "error": "invalid_auth"}
+    mock_response2 = MagicMock()
+    mock_response2.status = 200
+    mock_response2.json.return_value = {"ok": True, "messages": []}
+    mock_request.get.side_effect = [mock_response1, mock_response2]
+
+    with patch.object(slack_client, "_get_web_token", side_effect=["old", "new", "new"]), patch.object(
+        slack_client.session, "request", return_value=mock_request
+    ), patch.object(slack_client, "_refresh_web_token", wraps=slack_client._refresh_web_token) as refresh_mock:
+        result = slack_client._slack_api_call("conversations.history", params={"channel": "C123456"})
+        assert result == {"ok": True, "messages": []}
+        assert refresh_mock.called
+
+
 def test_notion_append_audit_note(mock_browser_session, browser_config):
     """Test appending an audit note to a Notion page."""
     notion_client = NotionBrowserClient(mock_browser_session, browser_config)
@@ -179,6 +202,18 @@ def test_security_measures(mock_browser_session, browser_config):
     # In a real scenario, you would test authentication and authorization
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)
     assert slack_client.config.slack_workspace_id == "T123456"
+
+
+def test_dom_snapshot_written(tmp_path):
+    """Test that DOM snapshots are written when enabled."""
+    config = BrowserAutomationConfig(recordings_dir=str(tmp_path), html_snapshot_on_error=True)
+    session = BrowserSession(config)
+    page = MagicMock()
+    page.content.return_value = "<html>ok</html>"
+
+    session._maybe_dom_snapshot(page, "error")
+    files = os.listdir(tmp_path)
+    assert any(name.endswith("_error.html") for name in files)
 
 
 def test_load_balancer_round_robin_selection():

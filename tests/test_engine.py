@@ -55,6 +55,7 @@ class EngineDryRunTests(unittest.TestCase):
                 },
                 "notion": {"token_env": "NOTION_API_KEY", "version": "2022-06-28"},
                 "audit": {"enabled": False},
+                "logging": {"run_report_dir": "output/test_run_reports"},
                 "validate_config_on_startup": False,
             },
             "projects": [
@@ -93,11 +94,13 @@ class EngineDryRunTests(unittest.TestCase):
                 thread_extractor=extractor,
             )
 
-            engine.run_sync(project_name="demo", since="2024-01-01T00:00:00Z", dry_run=True)
+            summary = engine.run_sync(project_name="demo", since="2024-01-01T00:00:00Z", dry_run=True)
 
             self.assertTrue(extractor.called)
             statuses = [record["status"] for record in audit_logger.records]
             self.assertIn("dry_run", statuses)
+            self.assertIsNotNone(summary)
+            self.assertEqual(summary["status"], "dry_run")
 
 
 if __name__ == "__main__":

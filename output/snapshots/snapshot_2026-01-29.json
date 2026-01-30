@@ -1,0 +1,146 @@
+{
+  "date": "2026-01-29",
+  "total_tasks": 7,
+  "actionable_tasks": 7,
+  "high_priority_tasks": 1,
+  "tasks": [
+    {
+      "text": "Tasks below fellas: *<@U095BK30FKQ>* \u2022 EDS LPs \u2013 build in progress (design done; copy pending) \u2022 Clear Choice Painting \u2013 content upload \u2022 Michaelis ticket *<@U088D41PZ44>* \u2022 Magnify - chatbot \u2022 Service Scalers \u2013 UTM System \u2022 ProSewer ticket \u2022 Parker and Co build",
+      "channel": "ss-website-pod",
+      "owner": "Lisa Appleby",
+      "timestamp": "1769698285.792579",
+      "permalink": "https://quickerleads.slack.com/archives/C085B73T2JE/p1769698285792579",
+      "source": "slack",
+      "status": "Open",
+      "priority": "Low",
+      "due_date": "",
+      "client": "Website Pod",
+      "task_type": "feature",
+      "urgency_score": 0,
+      "is_actionable": true,
+      "mentions": [
+        "U095BK30FKQ",
+        "U088D41PZ44"
+      ],
+      "tags": [
+        "ticket"
+      ]
+    },
+    {
+      "text": "*<@U095BK30FKQ>* \u2022 Magnify \u2013 3 landing pages- chatbot \u2022 Parker & Co \u2013 build/designs in progress (awaiting sitemap/agenda) \u2022 Clear Choice Painting \u2013 template build + content upload \u2022 Michaelis \u2022 Sunshine Services \u2013 LLM/TrustSignal request (ticket active) \u2022 Performance of Maine \u2013 BugHerd edits \u2022 Service Scalers Website *<@U088D41PZ44>* \u2022 EDS LPs \u2013 build in progress (design done; copy pending) \u2022 Lake County Mechanical \u2013 support transition to hosting/launch prep + DNS/launch help \u2022 Service Scalers \u2013 UTM system analysis/fix \u2022 Clear Choice Painting \u2013 coordinate GBP/reviews context if needed \u2022 ProSewer SEO \u2022 Parker and Co build",
+      "channel": "ss-website-pod",
+      "owner": "Christopher Belgrave",
+      "timestamp": "1769696978.514879",
+      "permalink": "https://quickerleads.slack.com/archives/C085B73T2JE/p1769696978514879",
+      "source": "slack",
+      "status": "Open",
+      "priority": "High",
+      "due_date": "",
+      "client": "Website Pod",
+      "task_type": "bug",
+      "urgency_score": 4,
+      "is_actionable": true,
+      "mentions": [
+        "U095BK30FKQ",
+        "U088D41PZ44"
+      ],
+      "tags": [
+        "ticket",
+        "bug"
+      ]
+    },
+    {
+      "text": "\u2022 Lake County Mechanical \u2022 Michaelis \u2022 Peak Electric Group \u2022 Clear Choice Painting \u2022 Gary Air \u2022 EDS",
+      "channel": "standup",
+      "owner": "Christopher Belgrave",
+      "timestamp": "1769698003.152689",
+      "permalink": "https://quickerleads.slack.com/archives/C02UJJDNFMJ/p1769698003152689",
+      "source": "slack",
+      "status": "Open",
+      "priority": "Low",
+      "due_date": "",
+      "client": "Standup",
+      "task_type": "general",
+      "urgency_score": 0,
+      "is_actionable": true,
+      "mentions": [],
+      "tags": []
+    },
+    {
+      "text": "\u2022 EDS Pumps LPs \u2022 EDS Pumps Website Build \u2022 Clear Choice Painting location pages",
+      "channel": "standup",
+      "owner": "Italo Germando",
+      "timestamp": "1769696885.499569",
+      "permalink": "https://quickerleads.slack.com/archives/C02UJJDNFMJ/p1769696885499569",
+      "source": "slack",
+      "status": "Open",
+      "priority": "Low",
+      "due_date": "",
+      "client": "Standup",
+      "task_type": "feature",
+      "urgency_score": 0,
+      "is_actionable": true,
+      "mentions": [],
+      "tags": []
+    },
+    {
+      "text": "\u2022 ProSewer SEO \u2022 Parker and Co build \u2022 Service Scalers UTM",
+      "channel": "standup",
+      "owner": "Francisco",
+      "timestamp": "1769696684.668319",
+      "permalink": "https://quickerleads.slack.com/archives/C02UJJDNFMJ/p1769696684668319",
+      "source": "slack",
+      "status": "Open",
+      "priority": "Low",
+      "due_date": "",
+      "client": "Standup",
+      "task_type": "feature",
+      "urgency_score": 0,
+      "is_actionable": true,
+      "mentions": [],
+      "tags": []
+    },
+    {
+      "text": "The homepage is done, but I need to check each page of the website <@U070JEH0746>",
+      "channel": "ss-magnify-website-management-and-hosting-wp",
+      "owner": "Francisco",
+      "timestamp": "1769720600.270749",
+      "permalink": "https://quickerleads.slack.com/archives/C07RX8T33L6/p1769720600270749",
+      "source": "slack",
+      "status": "Open",
+      "priority": "Low",
+      "due_date": "",
+      "client": "Magnify",
+      "task_type": "content",
+      "urgency_score": 0,
+      "is_actionable": true,
+      "mentions": [
+        "U070JEH0746"
+      ],
+      "tags": []
+    },
+    {
+      "text": "<https://www.notion.so/quickerleads/Pre-book-dev-time-to-implement-new-schedulebot-for-Magnify-Electric-as-per-Slack-Christopher-Belg-c80789b23d394fb9aa9dd3fcc3828060?v=28f1c9f5b34f80dd97d8000c884740f8&amp;source=copy_link|https://www.notion.so/quickerleads/Pre-book-dev-time-to-implement-new-schedulebot-f[\u2026]fcc3828060?v=28f1c9f5b34f80dd97d8000c884740f8&amp;source=copy_link> Do you have more information about this task, please? <@U0A6MGN9S77> <@U070JEH0746>",
+      "channel": "ss-magnify-website-management-and-hosting-wp",
+      "owner": "Francisco",
+      "timestamp": "1769718039.231009",
+      "permalink": "https://quickerleads.slack.com/archives/C07RX8T33L6/p1769718039231009",
+      "source": "slack",
+      "status": "Open",
+      "priority": "Low",
+      "due_date": "",
+      "client": "Magnify",
+      "task_type": "feature",
+      "urgency_score": 0,
+      "is_actionable": true,
+      "mentions": [
+        "U0A6MGN9S77",
+        "U070JEH0746"
+      ],
+      "tags": [
+        "notion"
+      ]
+    }
+  ],
+  "created_at": "2026-01-29T20:03:58.244494"
+}

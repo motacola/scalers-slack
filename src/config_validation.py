@@ -80,6 +80,23 @@ def validate_config(config: dict) -> list[str]:
 
     settings = config.get("settings", {}) if isinstance(config, dict) else {}
     audit_settings = settings.get("audit", {}) if isinstance(settings, dict) else {}
+    browser_settings = settings.get("browser_automation", {}) if isinstance(settings, dict) else {}
+
+    if browser_settings.get("enabled", False):
+        storage_state_path = browser_settings.get("storage_state_path")
+        user_data_dir = browser_settings.get("user_data_dir")
+        interactive_login = browser_settings.get("interactive_login", True)
+        headless = browser_settings.get("headless", True)
+        if not storage_state_path and not user_data_dir:
+            errors.append(
+                "settings.browser_automation.enabled requires storage_state_path or user_data_dir"
+            )
+        if headless and not interactive_login and not storage_state_path and not user_data_dir:
+            errors.append(
+                "settings.browser_automation: headless with interactive_login disabled requires storage state or user_data_dir"
+            )
+        if "event_log_path" in browser_settings and not browser_settings.get("event_log_path"):
+            errors.append("settings.browser_automation.event_log_path cannot be empty")
 
     project_names = []
     for project in config.get("projects", []):

@@ -1,0 +1,74 @@
+{
+    "channels": [
+        "ss-website-pod",
+        "ss-website-tickets",
+        "standup"
+    ],
+    "project_channels": [
+        "ss-magnify-website-management-and-hosting-wp",
+        "ss-eds-pumps-website-management",
+        "ss-seaside-toolbox-website"
+    ],
+    "team_members": [
+        "Christopher Belgrave",
+        "Francisco",
+        "Italo Germando",
+        "Lisa Appleby",
+        "Craig Noonan"
+    ],
+    "output": {
+        "directory": "output",
+        "formats": [
+            "csv",
+            "json",
+            "markdown",
+            "html"
+        ],
+        "default_format": "all",
+        "group_by": "owner"
+    },
+    "filtering": {
+        "actionable_only": false,
+        "include_mentions_search": true,
+        "min_text_length": 20,
+        "exclude_patterns": [
+            "^\\s*thank",
+            "^\\s*thx",
+            "^\\s*ok\\s*$",
+            "^\\s*okay\\s*$",
+            "^\\s*brb",
+            "^\\s*got it",
+            "^\\s*done\\s*$",
+            "^\\s*lol",
+            "^\\s*haha"
+        ]
+    },
+    "cache": {
+        "enabled": true,
+        "directory": ".cache",
+        "ttl_seconds": 3600
+    },
+    "browser_automation": {
+        "enabled": true,
+        "headless": false,
+        "slow_mo_ms": 0,
+        "timeout_ms": 30000,
+        "max_retries": 3,
+        "retry_delay_ms": 1000,
+        "storage_state_path": "browser_storage_state.json",
+        "slack_workspace_id": "TBLCQAFEG",
+        "slack_client_url": "https://app.slack.com/client",
+        "slack_api_base_url": "https://slack.com/api"
+    },
+    "historical_tracking": {
+        "enabled": true,
+        "snapshots_directory": "output/snapshots",
+        "compare_with_previous": true
+    },
+    "notion": {
+        "enabled": false,
+        "sync_tasks": false,
+        "database_id": "",
+        "base_url": "https://www.notion.so"
+    }
+}

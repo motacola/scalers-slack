@@ -48,7 +48,8 @@ DEFAULT_CONFIG = {
         "validate_config_on_startup": True,
         "logging": {
             "json": True,
-            "level": "INFO"
+            "level": "INFO",
+            "run_report_dir": "output/run_reports"
         },
         "browser_automation": {
             "enabled": False,
@@ -75,6 +76,7 @@ DEFAULT_CONFIG = {
             "smart_wait_stability_ms": 600,
             "overlay_enabled": False,
             "recordings_dir": "output/browser_recordings",
+            "html_snapshot_on_error": True,
             "event_log_path": "output/browser_events.jsonl",
             "screenshot_on_step": False,
             "screenshot_on_error": True
