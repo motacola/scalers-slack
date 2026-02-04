@@ -8,7 +8,7 @@ fallback strategies for resilience against UI changes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 
 @dataclass
@@ -223,7 +223,7 @@ class DOMExtractor:
             if data["text"]:
                 return data
 
-        except Exception as e:
+        except Exception:
             # Log error but don't fail - message might be malformed
             pass
 
@@ -235,7 +235,7 @@ class DOMExtractor:
             try:
                 text_el = element.locator(selector).first
                 if text_el.is_visible(timeout=1000):
-                    return text_el.text_content().strip()
+                    return cast(str, text_el.text_content()).strip()
             except Exception:
                 continue
         return ""
@@ -246,7 +246,7 @@ class DOMExtractor:
             try:
                 user_el = element.locator(selector).first
                 if user_el.is_visible(timeout=1000):
-                    return user_el.text_content().strip()
+                    return cast(str, user_el.text_content()).strip()
             except Exception:
                 continue
         return "Unknown"
@@ -298,7 +298,7 @@ class DOMExtractor:
     def is_message_visible(self, element: Any) -> bool:
         """Check if element is a visible message."""
         try:
-            return element.is_visible(timeout=1000)
+            return cast(bool, element.is_visible(timeout=1000))
         except Exception:
             return False
 
@@ -309,7 +309,7 @@ class DOMExtractor:
             try:
                 count = self.page.locator(selector).count()
                 if count > 0:
-                    return count
+                    return cast(int, count)
             except Exception:
                 continue
         return 0

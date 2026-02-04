@@ -204,6 +204,7 @@ class ScalersSlackEngine:
         since: str | None = None,
         query: str | None = None,
         dry_run: bool = False,
+        post_to_slack: bool = False,
     ) -> dict[str, Any] | None:
         run_started = time.monotonic()
         project = get_project(self.config, project_name)
@@ -224,6 +225,7 @@ class ScalersSlackEngine:
             "since": since,
             "query": query,
             "dry_run": dry_run,
+            "post_to_slack": post_to_slack,
             "browser_enabled": self.browser_enabled,
             "status": "started",
         }
@@ -233,6 +235,12 @@ class ScalersSlackEngine:
         enable_notion_last_synced = _effective_feature(self.feature_settings, project, "enable_notion_last_synced")
         enable_slack_topic_update = _effective_feature(self.feature_settings, project, "enable_slack_topic_update")
         enable_run_id = _effective_feature(self.feature_settings, project, "enable_run_id_idempotency")
+
+        # Safety gate: never write to Slack unless explicitly requested.
+        slack_writes_allowed = bool(post_to_slack) and not dry_run
+        if enable_slack_topic_update and not slack_writes_allowed:
+            enable_slack_topic_update = False
+        run_summary["slack_writes_allowed"] = slack_writes_allowed
 
         previous_audit_enabled = self.audit.enabled
         if previous_audit_enabled != enable_audit:
@@ -329,7 +337,8 @@ class ScalersSlackEngine:
                 run_summary["planned_actions"] = {
                     "notion_audit_note": bool(enable_notion_audit_note and audit_note_page and not skip_notion),
                     "notion_last_synced": bool(enable_notion_last_synced and last_synced_page and not skip_notion),
-                    "slack_topic_update": bool(enable_slack_topic_update),
+                    # Only possible when explicitly requested via --post-to-slack.
+                    "slack_topic_update": bool(enable_slack_topic_update and post_to_slack),
                 }
                 self.audit.log(action, "dry_run", {"count": len(threads), "project": project_name})
                 log_event(
@@ -568,6 +577,24 @@ class ScalersSlackEngine:
                 return
 
             self.notion.update_page_property(page_id, property_name, sync_timestamp)
+            
+            supports_verification = getattr(self.notion, "supports_verification", True)
+            if not supports_verification:
+                self.audit.log(action, "completed", {"page_id": page_id, "value": sync_timestamp, "run_id": run_id})
+                log_event(
+                    logger,
+                    action="notion_last_synced",
+                    status="completed",
+                    project=None,
+                    run_id=run_id,
+                    page_id=page_id,
+                    value=sync_timestamp,
+                    duration_ms=int((time.monotonic() - start_time) * 1000),
+                    notion_stats=self._get_client_stats(self.notion),
+                    json_enabled=self.json_logging,
+                )
+                return
+
             page = self.notion.get_page(page_id)
             actual = self._extract_notion_date(page, property_name)
             if actual != sync_timestamp:
@@ -815,6 +842,11 @@ def main() -> None:
     parser.add_argument("--since", help="ISO8601 timestamp (e.g. 2024-01-01T00:00:00Z)")
     parser.add_argument("--query", help="Slack search query")
     parser.add_argument("--dry-run", action="store_true", help="Collect threads but skip writes")
+    parser.add_argument(
+        "--post-to-slack",
+        action="store_true",
+        help="Allow Slack writes (e.g., channel topic updates). Disabled by default so you can review first.",
+    )
     parser.add_argument("--validate-config", action="store_true", help="Validate config and exit")
     parser.add_argument("--summarize", action="store_true", help="Generate an AI standup report")
     parser.add_argument("--update-tickets", action="store_true", help="Update Notion tickets with project activity")
@@ -929,7 +961,13 @@ def main() -> None:
 
         def sync_one(p_name: str) -> dict[str, Any] | None:
             try:
-                return engine.run_sync(project_name=p_name, since=args.since, query=args.query, dry_run=args.dry_run)
+                return engine.run_sync(
+                    project_name=p_name,
+                    since=args.since,
+                    query=args.query,
+                    dry_run=args.dry_run,
+                    post_to_slack=args.post_to_slack,
+                )
             except Exception as exc:
                 print(f"Error syncing project '{p_name}': {exc}", file=sys.stderr)
                 return None

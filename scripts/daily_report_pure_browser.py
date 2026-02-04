@@ -12,7 +12,7 @@ from typing import Any
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.cache_manager import CacheManager
-from src.config_manager import ConfigManager, get_default_config
+from src.config_manager import ConfigManager
 from src.historical_comparison import HistoricalTracker
 from src.pure_browser_automation import PureBrowserAutomationManager, PureBrowserConfig
 from src.report_generator import ReportGenerator
@@ -95,9 +95,9 @@ def main() -> int:
     start = date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
 
-    print(f"=" * 60)
+    print("=" * 60)
     print(f"Daily Task Report (Pure Browser) - {date_str}")
-    print(f"=" * 60)
+    print("=" * 60)
 
     # Get all channels
     all_channels = config.channels + config.project_channels
@@ -124,7 +124,7 @@ def main() -> int:
                 try:
                     # Navigate to channel
                     if not slack.navigate_to_channel(channel_name):
-                        print(f"    ✗ Could not navigate to channel")
+                        print("    ✗ Could not navigate to channel")
                         continue
 
                     # Fetch messages
@@ -277,7 +277,7 @@ def main() -> int:
         owner = task.owner or "Unknown"
         by_owner[owner] = by_owner.get(owner, 0) + 1
 
-    print(f"\nTasks by Owner:")
+    print("\nTasks by Owner:")
     for owner, count in sorted(by_owner.items(), key=lambda x: -x[1]):
         print(f"  {owner}: {count}")
 

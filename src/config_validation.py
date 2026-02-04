@@ -54,7 +54,7 @@ def _effective_feature(settings: dict, project: dict, key: str) -> bool:
 
 
 def _validate_notion_id(value: str) -> bool:
-    return bool(NOTION_ID_RE.match(value) or NOTION_ID_DASHED_RE.match(value))
+    return _extract_notion_page_id(value) is not None
 
 
 def _extract_notion_page_id(value: str) -> str | None:
@@ -93,19 +93,19 @@ def validate_config(config: dict) -> list[str]:
             )
         if headless and not interactive_login and not storage_state_path and not user_data_dir:
             errors.append(
-                "settings.browser_automation: headless with interactive_login disabled requires storage state or user_data_dir"
+                "settings.browser_automation: headless with interactive_login disabled "
+                "requires storage state or user_data_dir"
             )
         if "event_log_path" in browser_settings and not browser_settings.get("event_log_path"):
             errors.append("settings.browser_automation.event_log_path cannot be empty")
 
-    project_names = []
     for project in config.get("projects", []):
         name = project.get("name")
         if not name:
             errors.append("project.name is required")
             continue
-        project_names.append(name)
 
+    project_names = [p.get("name") for p in config.get("projects", []) if p.get("name")]
     duplicates = {n for n in project_names if project_names.count(n) > 1}
     for dup in sorted(duplicates):
         errors.append(f"project.name must be unique: {dup}")

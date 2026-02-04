@@ -4,23 +4,22 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from src.browser_automation import BrowserAutomationConfig, BrowserSession, SlackBrowserClient
+from src.browser_automation import BrowserAutomationConfig, BrowserSession
 from src.cache_manager import CacheManager
 from src.config_loader import load_config
+from src.enhanced_browser_automation import EnhancedSlackBrowserClient
 from src.report_generator import ReportGenerator
 from src.task_processor import (
     Task,
     deduplicate_tasks,
     filter_actionable_tasks,
-    is_conversational_noise,
     process_message,
 )
 
@@ -70,9 +69,10 @@ def _is_ticket_complete(text: str) -> bool:
 
 
 def fetch_messages_with_cache(
-    slack: SlackBrowserClient,
+    slack: EnhancedSlackBrowserClient,
     cache: CacheManager,
     channel_id: str,
+    channel_name: str,
     start: datetime,
     end: datetime,
     max_pages: int = 10,
@@ -90,11 +90,12 @@ def fetch_messages_with_cache(
     cached_data = cache.get(cache_key, params)
     if cached_data is not None:
         print(f"  Using cached data for channel {channel_id}")
-        return cached_data
+        return cast(list[dict[str, Any]], cached_data)
 
     # Fetch from API
-    messages = slack.fetch_channel_history_paginated(
+    messages = slack.fetch_channel_history_with_permalinks(
         channel_id=channel_id,
+        channel_name=channel_name,
         oldest=str(start.timestamp()),
         latest=str(end.timestamp()),
         limit=200,
@@ -167,9 +168,16 @@ def main() -> int:
     browser_settings = settings.get("browser_automation", {})
     browser_config = _build_browser_config(browser_settings)
 
+    # Build name -> id map from config to avoid extra API calls
+    channel_map = {
+        p.get("name"): p.get("slack_channel_id")
+        for p in config.get("projects", [])
+        if p.get("name") and p.get("slack_channel_id")
+    }
+
     # Initialize browser session
     session = BrowserSession(browser_config)
-    slack = SlackBrowserClient(session, browser_config)
+    slack = EnhancedSlackBrowserClient(session, browser_config)
 
     tasks: list[Task] = []
 
@@ -179,7 +187,7 @@ def main() -> int:
         channel_ids: dict[str, str] = {}
         for channel_name in all_channels:
             try:
-                channel_id = slack.resolve_channel_id(channel_name)
+                channel_id = channel_map.get(channel_name) or slack.resolve_channel_id(channel_name)
                 if channel_id:
                     channel_ids[channel_name] = channel_id
                 else:
@@ -194,11 +202,12 @@ def main() -> int:
             try:
                 if cache:
                     messages = fetch_messages_with_cache(
-                        slack, cache, channel_id, start, end, max_pages=10
+                        slack, cache, channel_id, channel_name, start, end, max_pages=10
                     )
                 else:
-                    messages = slack.fetch_channel_history_paginated(
+                    messages = slack.fetch_channel_history_with_permalinks(
                         channel_id=channel_id,
+                        channel_name=channel_name,
                         oldest=str(start.timestamp()),
                         latest=str(end.timestamp()),
                         limit=200,
@@ -273,7 +282,7 @@ def main() -> int:
         print(f"After actionable filter: {len(tasks)} tasks")
 
     # Generate reports
-    print(f"\nGenerating reports...")
+    print("\nGenerating reports...")
     generator = ReportGenerator(tasks, date_str)
 
     output_base = args.output

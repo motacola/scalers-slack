@@ -4,7 +4,7 @@ import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -23,7 +23,9 @@ DEFAULT_COLUMNS = [
     "Source",
 ]
 
-DATE_RE = re.compile(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}")
+DATE_RE = re.compile(
+    r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}"
+)
 
 
 def _normalize(text: str) -> str:
@@ -41,7 +43,7 @@ def _extract_text(msg: dict[str, Any]) -> str:
             if isinstance(btext, dict):
                 t = btext.get("text")
                 if t:
-                    return t
+                    return cast(str, t)
     return ""
 
 
@@ -149,6 +151,8 @@ def main() -> int:
 
     try:
         for channel_name, channel_id in channel_ids.items():
+            if not channel_id:
+                continue
             messages = slack.fetch_channel_history_paginated(
                 channel_id=channel_id,
                 oldest=str(start.timestamp()),

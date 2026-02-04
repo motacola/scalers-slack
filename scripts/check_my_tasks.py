@@ -56,7 +56,7 @@ def check_my_tasks(user_id="U0A6MGN9S77"):  # Christopher Belgrave's ID
                             continue
                         seen_ts.add(ts)
                         
-                        text = msg.get("text", "") or " ".join([b.get("type", "") for b in msg.get("blocks", [])])
+                        text = msg.get("text", "") or " ".join([b.get("type", "") for b in (msg.get("blocks") or [])])
                         text = text.replace("\n", " ").strip()
                         user = msg.get("user", "unknown")
                          

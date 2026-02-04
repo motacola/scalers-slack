@@ -47,9 +47,32 @@ Search for threads by query:
 python3 -m src.engine --project scalers-slack --query "customer escalation" --since 2024-01-01T00:00:00Z
 ```
 
+Friendly daily digest (review-first; last 24h):
+```bash
+# HTML (best for reading). Defaults to: ss-website-pod + ss-website-tickets + standup
+python3 scripts/dm_daily_digest.py --hours 24 --format html
+
+# Same, but open it automatically after generating
+python3 scripts/dm_daily_digest.py --hours 24 --format html --open
+
+# Shortcut (same channel set as above)
+python3 scripts/dm_daily_digest.py --hours 24 --format html --important --open
+
+# Add DMs too (noisier)
+python3 scripts/dm_daily_digest.py --hours 24 --format html --important --include-dms --open
+```
+Outputs are written under `output/` for you to review.
+
 Dry run (no external writes):
 ```bash
 python3 -m src.engine --project scalers-slack --since 2024-01-01T00:00:00Z --dry-run
+```
+
+Slack write safety gate (review-first):
+- By default, **no Slack writes happen** (even if `enable_slack_topic_update` is true).
+- To allow Slack writes (e.g., channel topic updates), pass:
+```bash
+python3 -m src.engine --project scalers-slack --since 2024-01-01T00:00:00Z --post-to-slack
 ```
 
 ## Audit Storage
@@ -85,6 +108,13 @@ Each project can override these flags by adding the same keys to the project obj
 
 Config validation runs on startup (set `settings.validate_config_on_startup` to `false` to skip).
 If Notion page IDs are not yet configured, keep `enable_notion_audit_note` / `enable_notion_last_synced` disabled to avoid validation failures.
+
+You can source Notion page IDs from environment variables to avoid editing `config.json` daily:
+```json
+"notion_audit_page_id": "env:NOTION_AUDIT_PAGE_ID",
+"notion_last_synced_page_id": "${NOTION_LAST_SYNCED_PAGE_ID}"
+```
+If the environment variable contains a full Notion URL or a dashed ID, it will be normalized automatically.
 
 Validate config only:
 ```bash

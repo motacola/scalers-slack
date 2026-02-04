@@ -50,7 +50,7 @@ def check_details_browser(users):
                         continue
                     seen_ts.add(ts)
                     
-                    text = msg.get("text", "") or msg.get("blocks", [{}])[0].get("text", {}).get("text", "")
+                    text = msg.get("text", "") or (msg.get("blocks") or [{}])[0].get("text", {}).get("text", "")
                     # Fetch full blocks if possible, but text usually contains markdown
                     # If text is truncated, we might need to fetch the message permalink content? 
                     # Search results usually have full text.

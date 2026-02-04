@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
-
+from typing import Any, cast
 
 # Phrases to filter out as conversational noise
 CONVERSATIONAL_NOISE = {
@@ -157,7 +156,7 @@ def extract_text_from_message(msg: dict[str, Any]) -> str:
             if isinstance(btext, dict):
                 t = btext.get("text")
                 if t:
-                    return t
+                    return cast(str, t)
     return ""
 
 
@@ -252,15 +251,19 @@ def determine_task_type(text: str) -> str:
 
 
 def is_likely_task(text: str) -> bool:
-    """Determine if text is likely to be a task."""
+    """Determine if text is likely to be a task (general channels)."""
     normalized = normalize_text(text).lower()
 
-    # Check for task indicators
+    # Check for task indicators anywhere
     for indicator in TASK_INDICATORS:
         if re.search(indicator, normalized, re.IGNORECASE):
             return True
 
-    # Check for action verbs at start
+    # Questions that are likely requests
+    if "?" in text and any(word in normalized for word in ["can", "could", "would", "please", "help"]):
+        return True
+
+    # Action verbs at start
     action_starts = [
         "need",
         "should",
@@ -274,6 +277,55 @@ def is_likely_task(text: str) -> bool:
         if normalized.startswith(start):
             return True
 
+    return False
+
+
+def is_likely_task_dm(text: str) -> bool:
+    """Stricter task detection for DMs to reduce false positives."""
+    normalized = normalize_text(text).lower()
+
+    # Down-rank planning / FYI chatter common in DMs.
+    non_task_markers = [
+        "not for today",
+        "fyi",
+        "just letting you know",
+        "heads up",
+        "no worries",
+        "haha",
+        "lol",
+        "soon as",
+        "i'll let you know",
+        "i will let you know",
+    ]
+    if any(m in normalized for m in non_task_markers):
+        return False
+
+    # Accept strong explicit patterns.
+    strong_starts = [
+        "todo:",
+        "to-do:",
+        "task:",
+        "action:",
+        "please",
+        "can you",
+        "could you",
+        "would you",
+        "need",
+        "must",
+        "should",
+    ]
+    if any(normalized.startswith(s) for s in strong_starts):
+        return True
+
+    # Bullets are usually actionable in DMs.
+    if re.search(r"^\s*[-•\*]\s+", text):
+        return True
+
+    # A direct question request.
+    if "?" in text and any(word in normalized for word in ["can", "could", "would", "please", "help"]):
+        return True
+
+    # Otherwise, be conservative in DMs.
     return False
 
 
@@ -299,8 +351,11 @@ def process_message(
         if not any(m in team_members for m in mentions):
             return None
 
-    # Determine if actionable
-    is_actionable = is_likely_task(text)
+    # Determine if actionable (DMs are stricter to reduce false positives)
+    if channel_name.startswith("dm--"):
+        is_actionable = is_likely_task_dm(text)
+    else:
+        is_actionable = is_likely_task(text)
 
     # Calculate urgency
     urgency_score = calculate_urgency_score(text)

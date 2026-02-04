@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, cast
+from typing import Any, Callable, TypedDict, cast
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
@@ -120,19 +120,28 @@ class ScalabilityManager:
             return min(self.batch_size * 5, data_size)
 
 
+class PerformanceMetrics(TypedDict):
+    sync_operations: int
+    successful_operations: int
+    failed_operations: int
+    total_time_ms: float
+    average_time_ms: float
+    bottlenecks: list[dict[str, Any]]
+
+
 class PerformanceMonitor:
     """Monitors and tracks the performance of sync operations."""
     
     def __init__(self):
-        self.metrics = {
+        self.metrics: PerformanceMetrics = {
             "sync_operations": 0,
             "successful_operations": 0,
             "failed_operations": 0,
-            "total_time_ms": 0,
-            "average_time_ms": 0,
+            "total_time_ms": 0.0,
+            "average_time_ms": 0.0,
             "bottlenecks": [],
         }
-        self.start_time = 0
+        self.start_time: float = 0.0
     
     def start_monitoring(self):
         """Start monitoring a sync operation."""
@@ -168,13 +177,13 @@ class PerformanceMonitor:
                 "timestamp": time.time(),
             })
     
-    def get_metrics(self) -> dict[str, Any]:
+    def get_metrics(self) -> PerformanceMetrics:
         """Get the current performance metrics.
         
         Returns:
             dict: A dictionary containing the performance metrics.
         """
-        return dict(self.metrics)
+        return self.metrics.copy()
     
     def get_bottlenecks(self) -> list[dict[str, Any]]:
         """Get a list of identified bottlenecks.
@@ -182,7 +191,7 @@ class PerformanceMonitor:
         Returns:
             list: A list of dictionaries containing bottleneck information.
         """
-        return cast(list[dict[str, Any]], self.metrics["bottlenecks"])
+        return self.metrics["bottlenecks"]
     
     def reset(self):
         """Reset all performance metrics."""
@@ -190,11 +199,11 @@ class PerformanceMonitor:
             "sync_operations": 0,
             "successful_operations": 0,
             "failed_operations": 0,
-            "total_time_ms": 0,
-            "average_time_ms": 0,
+            "total_time_ms": 0.0,
+            "average_time_ms": 0.0,
             "bottlenecks": [],
         }
-        self.start_time = 0
+        self.start_time = 0.0
 
 
 class RecoveryManager:
@@ -508,6 +517,10 @@ class BrowserSession:
                     time.sleep(self.config.retry_delay_ms / 1000)
         raise last_error or RuntimeError(f"Failed to navigate to {url}")
 
+    def navigate(self, url: str):
+        """Alias for new_page to maintain compatibility."""
+        return self.new_page(url)
+
     def request(self):
         self.start()
         return self._context.request
@@ -795,6 +808,63 @@ class SlackBrowserClient:
         self._set_pagination_stats("search", page, len(matches))
         return matches
 
+    def list_conversations_paginated(
+        self,
+        types: str = "im,mpim",
+        limit: int = 200,
+        max_pages: int = 10,
+        exclude_archived: bool = True,
+    ) -> list[dict[str, Any]]:
+        """List conversations (supports DMs via types=im,mpim)."""
+        conversations: list[dict[str, Any]] = []
+        cursor: str | None = None
+        page = 0
+        while True:
+            params: dict[str, Any] = {
+                "types": types,
+                "limit": limit,
+                "exclude_archived": 1 if exclude_archived else 0,
+            }
+            if cursor:
+                params["cursor"] = cursor
+            data = self._slack_api_call("conversations.list", params=params)
+            conversations.extend(cast(list[dict[str, Any]], data.get("channels", [])))
+            cursor = cast(dict, data.get("response_metadata", {}) or {}).get("next_cursor")
+            page += 1
+            if not cursor or page >= max_pages:
+                break
+        self._set_pagination_stats("conversations.list", page, len(conversations))
+        return conversations
+
+    def fetch_thread_replies_paginated(
+        self,
+        channel_id: str,
+        thread_ts: str,
+        limit: int = 200,
+        max_pages: int = 10,
+    ) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
+        cursor: str | None = None
+        page = 0
+        while True:
+            params: dict[str, Any] = {"channel": channel_id, "ts": thread_ts, "limit": limit}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._slack_api_call("conversations.replies", params=params)
+            messages.extend(cast(list[dict[str, Any]], data.get("messages", [])))
+            cursor = cast(dict, data.get("response_metadata", {}) or {}).get("next_cursor")
+            page += 1
+            if not cursor or page >= max_pages:
+                break
+        return messages
+
+    def get_message_permalink(self, channel_id: str, message_ts: str) -> str | None:
+        try:
+            data = self._slack_api_call("chat.getPermalink", params={"channel": channel_id, "message_ts": message_ts})
+            return cast(str | None, data.get("permalink"))
+        except Exception:
+            return None
+
     def update_channel_topic(self, channel_id: str, topic: str) -> None:
         self._slack_api_call("conversations.setTopic", method="POST", body={"channel": channel_id, "topic": topic})
 
@@ -975,6 +1045,14 @@ class NotionBrowserClient:
 
     def get_page(self, page_id: str) -> dict:
         return {}
+
+    def query_database(self, database_id: str, filter: dict | None = None) -> list[dict]:
+        logger.warning("query_database not implemented in NotionBrowserClient fallback.")
+        return []
+
+    def search_pages(self, query: str) -> list[dict]:
+        logger.warning("search_pages not implemented in NotionBrowserClient fallback.")
+        return []
 
     def reset_stats(self) -> None:
         self.stats = {

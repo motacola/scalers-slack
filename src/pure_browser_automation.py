@@ -10,13 +10,12 @@ This module provides complete Slack automation using only browser-based techniqu
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +216,7 @@ class SlackPureBrowserClient:
             }
             return false;
         """
-        return self.page.evaluate(scroll_script)
+        return cast(bool, self.page.evaluate(scroll_script))
 
     def _extract_visible_messages(self) -> list[dict[str, Any]]:
         """Extract messages from currently visible DOM elements."""
@@ -270,7 +269,7 @@ class SlackPureBrowserClient:
         """
 
         try:
-            return self.page.evaluate(extract_script)
+            return cast(list[dict[str, Any]], self.page.evaluate(extract_script))
         except Exception as e:
             logger.error(f"Failed to extract messages: {e}")
             return []
@@ -319,7 +318,7 @@ class SlackPureBrowserClient:
             """
 
             results = self.page.evaluate(extract_script)
-            return results[:max_results]
+            return cast(list[dict[str, Any]], results[:max_results])
 
         except Exception as e:
             logger.error(f"Search failed: {e}")
@@ -342,7 +341,7 @@ class SlackPureBrowserClient:
         """
 
         try:
-            return self.page.evaluate(extract_script)
+            return cast(dict[str, Any], self.page.evaluate(extract_script))
         except Exception as e:
             logger.error(f"Failed to get channel info: {e}")
             return {}
@@ -373,7 +372,7 @@ class SlackPureBrowserClient:
         try:
             user_info = self.page.evaluate(extract_script)
             self._user_cache[user_name] = user_info
-            return user_info
+            return cast(dict[str, str], user_info)
         except Exception:
             return {"name": user_name, "id": ""}
 

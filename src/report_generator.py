@@ -7,9 +7,8 @@ import json
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-from src.task_processor import Task, group_tasks_by_owner, group_tasks_by_client, sort_tasks_by_priority
+from src.task_processor import Task, group_tasks_by_client, group_tasks_by_owner, sort_tasks_by_priority
 
 
 class ReportGenerator:
@@ -222,19 +221,29 @@ class ReportGenerator:
         output_dir = Path(output_path).parent
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        actionable_count = sum(1 for t in self.tasks if t.is_actionable)
+        fyi_count = len(self.tasks) - actionable_count
         html_parts = [
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
-            f"<title>Daily Task Report - {self.date}</title>",
+            f"<title>Slack Digest • {self.date}</title>",
+            "<meta name='viewport' content='width=device-width, initial-scale=1' />",
             self._get_html_styles(),
             "</head>",
             "<body>",
-            f"<h1>Daily Task Report - {self.date}</h1>",
+            f"<h1>Slack digest (last 24 hours) • {self.date}</h1>",
             "<div class='summary'>",
-            f"<p><strong>Total Tasks:</strong> {len(self.tasks)}</p>",
-            f"<p><strong>Actionable Tasks:</strong> {sum(1 for t in self.tasks if t.is_actionable)}</p>",
-            f"<p><strong>High Priority:</strong> {sum(1 for t in self.tasks if t.priority == 'High')}</p>",
+            "<p class='summary-lede'>Here’s the useful stuff from your Slack DMs. Nothing is posted automatically.</p>",
+            f"<div class='summary-grid'>",
+            f"<div class='summary-card'><div class='summary-num'>{actionable_count}</div><div class='summary-label'>Things to do</div></div>",
+            f"<div class='summary-card'><div class='summary-num'>{fyi_count}</div><div class='summary-label'>FYI / context</div></div>",
+            "</div>",
+            "<div class='controls'>",
+            "<input id='filter' class='filter' type='search' placeholder='Filter… (type a name or keyword)' oninput='filterTasks()' />",
+            "<button class='btn' onclick='toggleAll(true)'>Expand all</button>",
+            "<button class='btn' onclick='toggleAll(false)'>Collapse all</button>",
+            "</div>",
             "</div>",
         ]
 
@@ -246,6 +255,19 @@ class ReportGenerator:
             html_parts.extend(self._generate_flat_html())
 
         html_parts.extend([
+            "<script>",
+            "function filterTasks(){",
+            "  const q=(document.getElementById('filter').value||'').toLowerCase();",
+            "  const items=document.querySelectorAll('[data-task]');",
+            "  items.forEach(el=>{",
+            "    const txt=(el.getAttribute('data-task')||'').toLowerCase();",
+            "    el.style.display = (!q || txt.includes(q)) ? '' : 'none';",
+            "  });",
+            "}",
+            "function toggleAll(open){",
+            "  document.querySelectorAll('details.owner').forEach(d=>{d.open=open;});",
+            "}",
+            "</script>",
             "</body>",
             "</html>",
         ])
@@ -259,124 +281,141 @@ class ReportGenerator:
         """Get CSS styles for HTML report."""
         return """
 <style>
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-    background: #f5f5f5;
+:root{
+  --bg:#0b0f14;
+  --panel:#111824;
+  --muted:#94a3b8;
+  --text:#e5e7eb;
+  --accent:#60a5fa;
+  --border:rgba(148,163,184,0.18);
+  --good:#22c55e;
+  --warn:#f59e0b;
+  --bad:#ef4444;
 }
-h1 {
-    color: #333;
-    border-bottom: 2px solid #4CAF50;
-    padding-bottom: 10px;
+*{box-sizing:border-box;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  margin:0;
+  padding:18px;
+  background:var(--bg);
+  color:var(--text);
 }
-h2 {
-    color: #555;
-    margin-top: 30px;
-    background: #e8e8e8;
-    padding: 10px;
-    border-radius: 5px;
+h1{
+  font-size:20px;
+  margin:0 0 12px 0;
 }
-h3 {
-    color: #666;
-    margin-top: 20px;
+.summary{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:14px;
+  margin-bottom:14px;
 }
-.summary {
-    background: white;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.summary-lede{margin:0 0 12px 0; color:var(--muted);}
+.summary-grid{display:flex; gap:10px; flex-wrap:wrap;}
+.summary-card{
+  flex:0 0 auto;
+  min-width:140px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px 12px;
 }
-.task {
-    background: white;
-    padding: 15px;
-    margin: 10px 0;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    border-left: 4px solid #ddd;
+.summary-num{font-size:22px; font-weight:700; line-height:1;}
+.summary-label{color:var(--muted); font-size:12px; margin-top:4px;}
+.controls{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;}
+.filter{
+  flex:1 1 240px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px 12px;
+  color:var(--text);
 }
-.task.high-priority {
-    border-left-color: #f44336;
+.btn{
+  background:rgba(255,255,255,0.06);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:10px;
+  padding:10px 12px;
+  cursor:pointer;
 }
-.task.medium-priority {
-    border-left-color: #ff9800;
+.btn:hover{border-color:rgba(96,165,250,0.6);}
+
+/* Owners */
+details.owner{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  margin:10px 0;
+  overflow:hidden;
 }
-.task.low-priority {
-    border-left-color: #4CAF50;
+details.owner > summary{
+  list-style:none;
+  cursor:pointer;
+  padding:12px 14px;
+  font-weight:700;
 }
-.task-text {
-    font-size: 16px;
-    margin-bottom: 8px;
+details.owner > summary::-webkit-details-marker{display:none;}
+.owner-meta{color:var(--muted); font-weight:500; font-size:12px; margin-left:8px;}
+.section{padding:0 14px 10px 14px;}
+.section h3{margin:12px 0 8px 0; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;}
+
+/* Tasks */
+.task{
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  margin:8px 0;
+  background:rgba(255,255,255,0.02);
 }
-.task-meta {
-    font-size: 13px;
-    color: #666;
+.taskline{display:flex; gap:10px; align-items:flex-start;}
+.pill{
+  flex:0 0 auto;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid var(--border);
+  color:var(--muted);
 }
-.tag {
-    display: inline-block;
-    background: #e3f2fd;
-    color: #1976d2;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    margin-right: 5px;
-}
-.tag.urgent {
-    background: #ffebee;
-    color: #c62828;
-}
-.badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: bold;
-    margin-right: 5px;
-}
-.badge-high {
-    background: #f44336;
-    color: white;
-}
-.badge-medium {
-    background: #ff9800;
-    color: white;
-}
-.badge-low {
-    background: #4CAF50;
-    color: white;
-}
-a {
-    color: #1976d2;
-    text-decoration: none;
-}
-a:hover {
-    text-decoration: underline;
-}
+.pill.todo{color:#0b0f14; background:var(--good); border-color:transparent;}
+.pill.fyi{color:var(--muted);}
+.tasktext{font-size:14px; line-height:1.35;}
+.taskmeta{margin-top:6px; color:var(--muted); font-size:12px;}
+.taskmeta a{color:var(--accent); text-decoration:none;}
+.taskmeta a:hover{text-decoration:underline;}
 </style>
 """
 
     def _generate_owner_html(self) -> list[str]:
-        """Generate HTML grouped by owner."""
-        parts = []
+        """Generate friendly HTML grouped by owner."""
+        parts: list[str] = []
         grouped = group_tasks_by_owner(self.tasks)
 
         for owner in sorted(grouped.keys()):
             tasks = sort_tasks_by_priority(grouped[owner])
-            parts.append(f"<h2>{owner}</h2>")
-
             actionable = [t for t in tasks if t.is_actionable]
-            if actionable:
-                parts.append("<h3>Action Items</h3>")
-                for task in actionable:
-                    parts.extend(self._format_task_html(task))
-
             non_actionable = [t for t in tasks if not t.is_actionable]
+            parts.append(
+                "<details class='owner' open>"
+                f"<summary>{self._escape(owner)}"
+                f"<span class='owner-meta'>({len(actionable)} to do • {len(non_actionable)} FYI)</span>"
+                "</summary>"
+            )
+            parts.append("<div class='section'>")
+
+            if actionable:
+                parts.append("<h3>Things to do</h3>")
+                for task in actionable:
+                    parts.extend(self._format_task_html(task, compact=False))
+
             if non_actionable:
-                parts.append("<h3>Updates/Notes</h3>")
+                parts.append("<h3>FYI</h3>")
                 for task in non_actionable:
                     parts.extend(self._format_task_html(task, compact=True))
+
+            parts.append("</div>")
+            parts.append("</details>")
 
         return parts
 
@@ -404,44 +443,48 @@ a:hover {
 
         return parts
 
+    def _escape(self, text: str) -> str:
+        return (
+            (text or "")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#39;")
+        )
+
     def _format_task_html(self, task: Task, compact: bool = False) -> list[str]:
-        """Format a single task as HTML."""
-        priority_class = ""
-        if task.priority == "High":
-            priority_class = "high-priority"
-        elif task.priority == "Medium":
-            priority_class = "medium-priority"
-        elif task.priority == "Low":
-            priority_class = "low-priority"
+        """Format a single item in a friendly, readable way."""
+        pill = "To do" if task.is_actionable else "FYI"
+        pill_class = "todo" if task.is_actionable else "fyi"
 
-        badge = ""
-        if task.priority:
-            badge_class = f"badge-{task.priority.lower()}"
-            badge = f"<span class='badge {badge_class}'>{task.priority}</span>"
+        safe_text = self._escape(task.text)
+        data_attr = self._escape(f"{task.owner} {task.channel} {task.client} {task.task_type} {task.text}")
 
-        tags = ""
-        for tag in task.tags:
-            tag_class = "urgent" if tag == "urgent" else ""
-            tags += f"<span class='tag {tag_class}'>{tag}</span>"
+        meta_bits: list[str] = []
+        if task.due_date and task.is_actionable:
+            meta_bits.append(f"Due: {self._escape(task.due_date)}")
+        if task.tags and task.is_actionable:
+            meta_bits.append("Tags: " + ", ".join(self._escape(t) for t in task.tags))
 
-        meta = []
-        if task.client:
-            meta.append(f"<strong>Client:</strong> {task.client}")
-        if task.owner:
-            meta.append(f"<strong>Owner:</strong> {task.owner}")
-        if task.due_date:
-            meta.append(f"<strong>Due:</strong> {task.due_date}")
-        if task.task_type:
-            meta.append(f"<strong>Type:</strong> {task.task_type}")
+        meta = " • ".join(meta_bits)
+        link = f"<a href='{self._escape(task.permalink)}' target='_blank'>Open in Slack</a>" if task.permalink else ""
 
-        meta_html = " | ".join(meta) if meta else ""
-
-        link = f"<a href='{task.permalink}' target='_blank'>View in Slack</a>" if task.permalink else ""
+        meta_line = ""
+        if not compact:
+            if meta and link:
+                meta_line = f"<div class='taskmeta'>{meta} • {link}</div>"
+            elif meta:
+                meta_line = f"<div class='taskmeta'>{meta}</div>"
+            elif link:
+                meta_line = f"<div class='taskmeta'>{link}</div>"
 
         return [
-            f"<div class='task {priority_class}'>",
-            f"<div class='task-text'>{badge} {task.text}</div>",
-            f"<div class='task-meta'>{meta_html} {tags}</div>" if not compact else "",
-            f"<div class='task-meta'>{link}</div>" if link and not compact else "",
+            f"<div class='task' data-task='{data_attr}'>",
+            "<div class='taskline'>",
+            f"<span class='pill {pill_class}'>{pill}</span>",
+            f"<div class='tasktext'>{safe_text}</div>",
+            "</div>",
+            meta_line,
             "</div>",
         ]

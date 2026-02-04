@@ -1,8 +1,7 @@
 """Tests for the browser automation module."""
 
-from unittest.mock import MagicMock, mock_open, patch
-
 import os
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 

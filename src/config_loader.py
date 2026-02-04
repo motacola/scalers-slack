@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Any, cast
 
 DEFAULT_CONFIG = {
@@ -94,6 +95,60 @@ DEFAULT_CONFIG = {
     "projects": []
 }
 
+ENV_VAR_PATTERN = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+NOTION_ID_RE = re.compile(r"[0-9a-fA-F]{32}")
+NOTION_ID_DASHED_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+
+
+def _resolve_env_placeholder(value: str) -> str:
+    stripped = value.strip()
+    if stripped.startswith("env:"):
+        var_name = stripped[4:].strip()
+        return os.getenv(var_name, "") if var_name else ""
+    match = ENV_VAR_PATTERN.match(stripped)
+    if match:
+        return os.getenv(match.group(1), "")
+    return value
+
+
+def _resolve_env_in_config(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _resolve_env_in_config(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_resolve_env_in_config(item) for item in value]
+    if isinstance(value, str):
+        return _resolve_env_placeholder(value)
+    return value
+
+
+def _extract_notion_id(value: str) -> str | None:
+    stripped = value.strip()
+    if NOTION_ID_RE.fullmatch(stripped):
+        return stripped
+    if NOTION_ID_DASHED_RE.fullmatch(stripped):
+        return stripped.replace("-", "")
+    dashed_match = NOTION_ID_DASHED_RE.search(stripped)
+    if dashed_match:
+        return dashed_match.group(0).replace("-", "")
+    raw_match = NOTION_ID_RE.search(stripped)
+    if raw_match:
+        return raw_match.group(0)
+    return None
+
+
+def _normalize_notion_ids(value: Any, key: str | None = None) -> Any:
+    if isinstance(value, dict):
+        return {item_key: _normalize_notion_ids(item, item_key) for item_key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_notion_ids(item) for item in value]
+    if isinstance(value, str) and key and key.endswith(("_page_id", "_database_id")):
+        extracted = _extract_notion_id(value)
+        if extracted:
+            return extracted
+    return value
+
 
 def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     for key, value in overrides.items():
@@ -114,7 +169,9 @@ def load_config(config_path: str) -> dict[str, Any]:
             user_config = cast(dict[str, Any], json.load(handle))
         _deep_merge(config, user_config)
 
-    return config
+    resolved = _resolve_env_in_config(config)
+    normalized = _normalize_notion_ids(resolved)
+    return cast(dict[str, Any], normalized)
 
 
 

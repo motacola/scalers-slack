@@ -7,7 +7,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from src.browser_automation import (
     BrowserAutomationConfig,
@@ -68,10 +68,9 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
 
             data = self._slack_api_call("conversations.list", params=params)
             channels = data.get("channels", [])
-
             for channel in channels:
                 if channel.get("name") == name:
-                    return channel.get("id")
+                    return cast(str, channel.get("id"))
 
             cursor = data.get("response_metadata", {}).get("next_cursor")
             if not cursor:
@@ -105,7 +104,7 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
         try:
             channel_id = page.evaluate("() => { return window.boot_data && window.boot_data.channel_id; }")
             if channel_id:
-                return channel_id
+                return cast(str, channel_id)
         except Exception:
             pass
 
@@ -157,7 +156,6 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
         )
 
         # Add permalinks
-        workspace_id = self.config.slack_workspace_id
         for msg in messages:
             ts = msg.get("ts", "").replace(".", "")
             if ts:
@@ -241,7 +239,7 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
                 "limit": limit,
             }
             data = self._slack_api_call("conversations.replies", params=params)
-            return data.get("messages", [])
+            return cast(list[dict[str, Any]], data.get("messages", []))
         except Exception as e:
             logger.error(f"Failed to get thread replies: {e}")
             return []
@@ -274,7 +272,7 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
             reply_count = msg.get("reply_count", 0)
             if reply_count > 0:
                 thread_ts = msg.get("thread_ts") or msg.get("ts")
-                replies = self.get_thread_replies(channel_id, thread_ts)
+                replies = self.get_thread_replies(channel_id, cast(str, thread_ts))
                 # Skip the parent message (first in replies)
                 all_messages.extend(replies[1:])
 

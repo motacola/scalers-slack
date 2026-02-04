@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -27,7 +26,7 @@ class CacheManager:
         """Get the file path for a cache key."""
         return self.cache_dir / f"{cache_key}.json"
 
-    def get(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any] | None:
+    def get(self, endpoint: str, params: dict[str, Any]) -> Any:
         """Get cached data if it exists and is not expired."""
         cache_key = self._get_cache_key(endpoint, params)
         cache_path = self._get_cache_path(cache_key)
@@ -49,7 +48,7 @@ class CacheManager:
         except (json.JSONDecodeError, OSError):
             return None
 
-    def set(self, endpoint: str, params: dict[str, Any], data: dict[str, Any]) -> None:
+    def set(self, endpoint: str, params: dict[str, Any], data: Any) -> None:
         """Cache data with timestamp."""
         cache_key = self._get_cache_key(endpoint, params)
         cache_path = self._get_cache_path(cache_key)
