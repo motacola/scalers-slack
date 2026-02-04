@@ -44,10 +44,7 @@ class EmailNotifier(NotificationPlugin):
         # In a real implementation, you would send via SMTP here
         # For this example, we just log it
         logger.info(
-            "📧 Email notification (not actually sent - example only):\n"
-            "  To: %s\n"
-            "  Subject: %s\n"
-            "  Message: %s",
+            "📧 Email notification (not actually sent - example only):\n  To: %s\n  Subject: %s\n  Message: %s",
             recipient,
             subject,
             message[:100],

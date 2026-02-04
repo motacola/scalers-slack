@@ -79,9 +79,7 @@ class TestPluginMetadata:
 
     def test_metadata_with_dependencies(self):
         """Test metadata with dependencies."""
-        metadata = PluginMetadata(
-            name="Test", version="1.0.0", description="Test", dependencies=["requests", "pytest"]
-        )
+        metadata = PluginMetadata(name="Test", version="1.0.0", description="Test", dependencies=["requests", "pytest"])
 
         assert len(metadata.dependencies) == 2
         assert "requests" in metadata.dependencies
