@@ -443,7 +443,8 @@ class PureBrowserSession:
 
     def _handle_login(self) -> None:
         """Handle interactive login."""
-        logger.info("Waiting for user to log in...")
+        logger.info("Starting interactive login flow")
+        # Interactive prompts for CLI users
         print("\n" + "=" * 60)
         print("Please log in to Slack in the browser window.")
         print("The session will be saved for future use.")
@@ -534,6 +535,8 @@ def create_storage_state_interactive(
     """Create browser storage state with interactive login."""
     from playwright.sync_api import sync_playwright
 
+    logger.info("Creating browser storage state interactively")
+    # Interactive prompts for CLI users
     print("\n" + "=" * 60)
     print("Creating Browser Storage State")
     print("=" * 60)
@@ -549,7 +552,8 @@ def create_storage_state_interactive(
         page.goto(workspace_url)
 
         # Wait for login
-        print("Waiting for login (timeout: 5 minutes)...")
+        logger.info("Waiting for login (timeout: 5 minutes)")
+        print("Waiting for login (timeout: 5 minutes)...")  # CLI feedback
         success_selectors = [
             '[data-qa="team-menu"]',
             '[data-qa="channel_sidebar"]',
@@ -574,8 +578,10 @@ def create_storage_state_interactive(
         if logged_in:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             context.storage_state(path=output_path)
-            print(f"\n✓ Storage state saved to: {output_path}")
+            logger.info("Storage state saved successfully to: %s", output_path)
+            print(f"\n✓ Storage state saved to: {output_path}")  # CLI feedback
         else:
-            print("\n✗ Login timeout - please try again")
+            logger.warning("Login timeout - storage state not saved")
+            print("\n✗ Login timeout - please try again")  # CLI feedback
 
         browser.close()

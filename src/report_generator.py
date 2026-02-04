@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
 from src.task_processor import Task, group_tasks_by_client, group_tasks_by_owner, sort_tasks_by_priority
+
+logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
@@ -61,7 +64,7 @@ class ReportGenerator:
                     }
                 )
 
-        print(f"Wrote {len(self.tasks)} rows to {output_path}")
+        logger.info("Wrote %d tasks to CSV: %s", len(self.tasks), output_path)
 
     def to_json(self, output_path: str) -> None:
         """Generate JSON report."""
@@ -79,7 +82,7 @@ class ReportGenerator:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
 
-        print(f"Wrote JSON report to {output_path}")
+        logger.info("Wrote JSON report to: %s", output_path)
 
     def to_markdown(self, output_path: str, group_by: str = "owner") -> None:
         """Generate Markdown report with grouping."""
@@ -107,7 +110,7 @@ class ReportGenerator:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
-        print(f"Wrote Markdown report to {output_path}")
+        logger.info("Wrote Markdown report to: %s", output_path)
 
     def _generate_owner_section(self) -> list[str]:
         """Generate tasks grouped by owner."""
@@ -288,7 +291,7 @@ class ReportGenerator:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(html_parts))
 
-        print(f"Wrote HTML report to {output_path}")
+        logger.info("Wrote HTML report to: %s", output_path)
 
     def _get_html_styles(self) -> str:
         """Get CSS styles for HTML report."""

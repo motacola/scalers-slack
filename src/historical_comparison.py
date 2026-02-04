@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from src.task_processor import Task
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -270,7 +273,7 @@ class HistoricalTracker:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(report)
-            print(f"Wrote comparison report to {output_path}")
+            logger.info("Wrote comparison report to: %s", output_path)
 
         return report
 

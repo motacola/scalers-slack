@@ -879,7 +879,8 @@ def main() -> None:
     if args.validate_config:
         config = load_config(args.config)
         validate_or_raise(config)
-        print("Config OK")
+        logger.info("Config OK")
+        print("Config OK")  # Keep for CLI user feedback
         return
 
     if not args.project and not args.all and not args.summarize:
@@ -932,7 +933,8 @@ def main() -> None:
     try:
         if args.summarize:
             report_prompt = engine.run_summarize(since=args.since, concurrency=args.concurrency)
-            print(report_prompt)
+            logger.info("Generated summary report")
+            print(report_prompt)  # Output for CLI
             return
 
         if args.update_tickets:
@@ -940,9 +942,12 @@ def main() -> None:
                 projects = config.get("projects", [])
                 for p in projects:
                     res = engine.run_ticket_update(p["name"], since=args.since)
-                    print(f"[{p['name']}] {res}")
+                    logger.info("Updated tickets for project: %s", p["name"])
+                    print(f"[{p['name']}] {res}")  # Output for CLI
             elif args.project:
-                print(engine.run_ticket_update(args.project, since=args.since))
+                result = engine.run_ticket_update(args.project, since=args.since)
+                logger.info("Updated tickets for project: %s", args.project)
+                print(result)  # Output for CLI
             else:
                 parser.error("--update-tickets requires --project or --all")
             return
@@ -953,7 +958,8 @@ def main() -> None:
             projects_to_run = [args.project] if args.project else []
 
         if not projects_to_run:
-            print("No projects to run.")
+            logger.warning("No projects to run")
+            print("No projects to run.")  # Output for CLI
             return
 
         def sync_one(p_name: str) -> dict[str, Any] | None:
@@ -966,7 +972,8 @@ def main() -> None:
                     post_to_slack=args.post_to_slack,
                 )
             except Exception as exc:
-                print(f"Error syncing project '{p_name}': {exc}", file=sys.stderr)
+                logger.error("Error syncing project '%s': %s", p_name, exc, exc_info=True)
+                print(f"Error syncing project '{p_name}': {exc}", file=sys.stderr)  # Output for CLI
                 return None
 
         def print_summary(summary: dict[str, Any]) -> None:
@@ -975,6 +982,13 @@ def main() -> None:
             threads = summary.get("thread_count", 0)
             duration = summary.get("duration_ms", 0)
             report_path = summary.get("report_path")
+            logger.info(
+                "Project sync complete: %s (status=%s, threads=%d, duration_ms=%d)",
+                project,
+                status,
+                threads,
+                duration,
+            )
             line = f"[{project}] status={status} threads={threads} duration_ms={duration}"
             if report_path:
                 line += f" report={report_path}"

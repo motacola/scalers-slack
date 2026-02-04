@@ -340,6 +340,8 @@ def create_storage_state_interactive(
     """Create browser storage state with interactive login."""
     from playwright.sync_api import sync_playwright
 
+    logger.info("Creating browser storage state interactively")
+    # Interactive prompts for CLI users
     print("Creating browser storage state...")
     print("A browser window will open. Please log in to Slack manually.")
     print("The session will be saved after login.")
@@ -353,19 +355,23 @@ def create_storage_state_interactive(
         page.goto("https://app.slack.com")
 
         # Wait for user to log in
-        print("Waiting for login (timeout: 5 minutes)...")
+        logger.info("Waiting for login (timeout: 5 minutes)")
+        print("Waiting for login (timeout: 5 minutes)...")  # CLI feedback
         try:
             # Wait for a sign that user is logged in
             page.wait_for_selector('[data-qa="team-menu"]', timeout=300000)
-            print("Login detected!")
+            logger.info("Login detected successfully")
+            print("Login detected!")  # CLI feedback
         except Exception:
-            print("Timeout waiting for login. Please try again.")
+            logger.warning("Login timeout exceeded")
+            print("Timeout waiting for login. Please try again.")  # CLI feedback
             browser.close()
             return
 
         # Save storage state
         context.storage_state(path=output_path)
-        print(f"Storage state saved to {output_path}")
+        logger.info("Storage state saved to: %s", output_path)
+        print(f"Storage state saved to {output_path}")  # CLI feedback
 
         browser.close()
 
