@@ -238,11 +238,20 @@ class ReportGenerator:
             "<div class='summary'>",
             "<p class='summary-lede'>Here’s the useful stuff from your Slack DMs. Nothing is posted automatically.</p>",
             "<div class='summary-grid'>",
-            f"<div class='summary-card'><div class='summary-num'>{actionable_count}</div><div class='summary-label'>Things to do</div></div>",
-            f"<div class='summary-card'><div class='summary-num'>{fyi_count}</div><div class='summary-label'>FYI / context</div></div>",
+            (
+                f"<div class='summary-card'><div class='summary-num'>{actionable_count}</div>"
+                f"<div class='summary-label'>Things to do</div></div>"
+            ),
+            (
+                f"<div class='summary-card'><div class='summary-num'>{fyi_count}</div>"
+                f"<div class='summary-label'>FYI / context</div></div>"
+            ),
             "</div>",
             "<div class='controls'>",
-            "<input id='filter' class='filter' type='search' placeholder='Filter… (type a name or keyword)' oninput='filterTasks()' />",
+            (
+                "<input id='filter' class='filter' type='search' "
+                "placeholder='Filter… (type a name or keyword)' oninput='filterTasks()' />"
+            ),
             "<button class='btn' onclick='toggleAll(true)'>Expand all</button>",
             "<button class='btn' onclick='toggleAll(false)'>Collapse all</button>",
             "</div>",
