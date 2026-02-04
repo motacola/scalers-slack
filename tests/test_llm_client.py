@@ -9,7 +9,7 @@ def test_llm_config_defaults():
     """Test LLM config default values."""
     config = LLMConfig()
     assert config.provider == "openai"
-    assert config.model == "gpt-4"
+    assert config.model == "gpt-5.2"
     assert config.temperature == 0.7
     assert config.max_tokens == 4000
 

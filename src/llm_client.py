@@ -16,7 +16,7 @@ class LLMConfig:
     """Configuration for LLM client."""
 
     provider: str = "openai"  # openai, anthropic, ollama, custom
-    model: str = "gpt-4"
+    model: str = "gpt-5.2"
     api_key: str = ""
     base_url: str | None = None
     temperature: float = 0.7
@@ -65,7 +65,7 @@ class OpenAIClient(LLMClient):
 
         response = self.client.chat.completions.create(
             model=self.config.model,
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
@@ -78,7 +78,7 @@ class OpenAIClient(LLMClient):
 
         response = self.client.chat.completions.create(
             model=self.config.model,
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
@@ -122,7 +122,7 @@ class AnthropicClient(LLMClient):
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             system=system_prompt or "",
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
         )
         # Extract text from first content block (safely handle different block types)
         first_block = response.content[0]
@@ -208,7 +208,7 @@ def get_default_llm() -> LLMClient:
     """Get default LLM client from environment variables."""
     # Check for available API keys in order of preference
     if os.getenv("OPENAI_API_KEY"):
-        return create_llm_client(LLMConfig(provider="openai", model="gpt-4o", api_key=os.getenv("OPENAI_API_KEY", "")))
+        return create_llm_client(LLMConfig(provider="openai", model="gpt-5.2", api_key=os.getenv("OPENAI_API_KEY", "")))
     elif os.getenv("ANTHROPIC_API_KEY"):
         return create_llm_client(
             LLMConfig(
