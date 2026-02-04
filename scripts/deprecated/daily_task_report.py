@@ -1,15 +1,35 @@
+"""
+DEPRECATED: This script has been superseded by dm_daily_digest.py
+
+Use instead:
+    python3 scripts/dm_daily_digest.py --hours 24 --format html --open
+
+This file is kept for backward compatibility only and will be removed in a future version.
+"""
+
 import argparse
 import csv
 import re
 import sys
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+warnings.warn(
+    "daily_task_report.py is deprecated. Use scripts/dm_daily_digest.py instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
-from src.browser_automation import BrowserAutomationConfig, BrowserSession, SlackBrowserClient
-from src.config_loader import load_config
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+from src.browser_automation import (  # noqa: E402
+    BrowserAutomationConfig,
+    BrowserSession,
+    SlackBrowserClient,
+)
+from src.config_loader import load_config  # noqa: E402
 
 DEFAULT_COLUMNS = [
     "Status",
