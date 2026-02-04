@@ -8,6 +8,13 @@ dependencies = [
   "jsonschema>=4.22.0",
 ]
 
+[project.scripts]
+scalers-digest = "scripts.dm_daily_digest:main"
+scalers-health = "scripts.browser_health_check:main"
+scalers-migrate = "scripts.migrate_to_supabase:main"
+scalers-setup = "scripts.create_storage_state:main"
+scalers-validate = "scripts.validate_config:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3.0",

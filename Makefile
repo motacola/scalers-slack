@@ -38,17 +38,20 @@ clean:  ## Remove generated files
 	find . -type d -name '.ruff_cache' -exec rm -rf {} + 2>/dev/null || true
 	rm -rf htmlcov .coverage
 
-validate-config:  ## Validate configuration file
-	python -m src.engine --validate-config
+validate-config:  ## Validate configuration files and environment
+	python3 scripts/validate_config.py
 
 health-check:  ## Run browser automation health check
-	python scripts/browser_health_check.py --config config/config.json
+	python3 scripts/browser_health_check.py --config config/config.json
 
 daily-digest:  ## Generate daily digest (HTML)
-	python scripts/dm_daily_digest.py --hours 24 --format html --important --open
+	python3 scripts/dm_daily_digest.py --hours 24 --format html --important --open
 
 my-tasks:  ## Check your personal tasks
-	python scripts/check_my_tasks.py
+	python3 scripts/check_my_tasks.py
+
+setup-browser:  ## Setup browser storage state for automation
+	python3 scripts/create_storage_state.py
 
 pre-commit:  ## Run pre-commit hooks on all files
 	pre-commit run --all-files
@@ -60,3 +63,39 @@ setup-env:  ## Create .env from example
 	else \
 		echo ".env already exists. Skipping."; \
 	fi
+
+setup:  ## Complete project setup (env + browser + validation)
+	@echo "🚀 Setting up Scalers Slack automation..."
+	@make setup-env
+	@echo "\n📦 Installing dependencies..."
+	@make dev-install
+	@echo "\n✅ Setup complete! Run 'make validate-config' to check your configuration."
+
+ci:  ## Run all CI checks (tests, linting, type checking)
+	@echo "Running CI checks..."
+	@make test
+	@make lint
+	@echo "✅ All CI checks passed!"
+
+watch-test:  ## Run tests in watch mode
+	pytest-watch
+
+typecheck:  ## Run type checking only
+	mypy src
+
+security-check:  ## Run security checks
+	bandit -r src/ -ll
+
+update-deps:  ## Update all dependencies
+	pip install --upgrade pip
+	pip install --upgrade -r requirements.txt
+	pip install --upgrade -r requirements-dev.txt
+	pip install --upgrade -r requirements-browser.txt
+
+list-todos:  ## List all TODO/FIXME comments in code
+	@echo "📝 TODO items:"
+	@grep -r "TODO\|FIXME" src/ scripts/ --color=always || echo "No TODOs found!"
+
+benchmark:  ## Run performance benchmarks
+	@echo "⏱️  Running benchmarks..."
+	@python3 -m pytest tests/ -k benchmark -v
