@@ -121,7 +121,6 @@ class SecurityScanner:
         found_secrets = []
 
         try:
-
             for pattern, name in patterns:
                 # Search in Python files (excluding .env and tests)
                 cmd = ["grep", "-r", "-E", pattern, "src/", "scripts/"]

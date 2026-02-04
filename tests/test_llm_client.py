@@ -16,9 +16,7 @@ def test_llm_config_defaults():
 
 def test_llm_config_custom():
     """Test LLM config with custom values."""
-    config = LLMConfig(
-        provider="anthropic", model="claude-3-5-sonnet-20241022", temperature=0.5, max_tokens=2000
-    )
+    config = LLMConfig(provider="anthropic", model="claude-3-5-sonnet-20241022", temperature=0.5, max_tokens=2000)
     assert config.provider == "anthropic"
     assert config.model == "claude-3-5-sonnet-20241022"
     assert config.temperature == 0.5

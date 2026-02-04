@@ -103,30 +103,28 @@ class SecretsManager:
         """Get Slack bot token."""
         token = self.get_secret("SLACK_BOT_TOKEN")
         if token and not token.startswith("xoxb-"):
-            warnings.warn(
-                "SLACK_BOT_TOKEN doesn't start with 'xoxb-'. " "Expected format for bot tokens is 'xoxb-...'"
-            )
+            warnings.warn("SLACK_BOT_TOKEN doesn't start with 'xoxb-'. Expected format for bot tokens is 'xoxb-...'")
         return token or ""
 
     def get_notion_key(self) -> str:
         """Get Notion API key."""
         key = self.get_secret("NOTION_API_KEY")
         if key and not (key.startswith("secret_") or key.startswith("ntn_")):
-            warnings.warn("NOTION_API_KEY format is unusual. " "Expected format is 'secret_...' or 'ntn_...'")
+            warnings.warn("NOTION_API_KEY format is unusual. Expected format is 'secret_...' or 'ntn_...'")
         return key or ""
 
     def get_openai_key(self) -> str | None:
         """Get OpenAI API key (optional)."""
         key = self.get_secret("OPENAI_API_KEY", required=False)
         if key and not key.startswith("sk-"):
-            warnings.warn("OPENAI_API_KEY doesn't start with 'sk-'. " "Expected format is 'sk-...'")
+            warnings.warn("OPENAI_API_KEY doesn't start with 'sk-'. Expected format is 'sk-...'")
         return key
 
     def get_anthropic_key(self) -> str | None:
         """Get Anthropic API key (optional)."""
         key = self.get_secret("ANTHROPIC_API_KEY", required=False)
         if key and not key.startswith("sk-ant-"):
-            warnings.warn("ANTHROPIC_API_KEY doesn't start with 'sk-ant-'. " "Expected format is 'sk-ant-...'")
+            warnings.warn("ANTHROPIC_API_KEY doesn't start with 'sk-ant-'. Expected format is 'sk-ant-...'")
         return key
 
     def validate_secrets(self) -> list[str]:

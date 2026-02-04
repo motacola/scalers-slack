@@ -36,9 +36,7 @@ class LLMClient(ABC):
         pass
 
     @abstractmethod
-    def generate_with_context(
-        self, messages: list[dict[str, Any]], system_prompt: str | None = None
-    ) -> str:
+    def generate_with_context(self, messages: list[dict[str, Any]], system_prompt: str | None = None) -> str:
         """Generate text with conversation context."""
         pass
 
@@ -74,9 +72,7 @@ class OpenAIClient(LLMClient):
         content = response.choices[0].message.content
         return str(content) if content else ""
 
-    def generate_with_context(
-        self, messages: list[dict[str, Any]], system_prompt: str | None = None
-    ) -> str:
+    def generate_with_context(self, messages: list[dict[str, Any]], system_prompt: str | None = None) -> str:
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
 
@@ -120,9 +116,7 @@ class AnthropicClient(LLMClient):
             return str(first_block.text)
         return ""
 
-    def generate_with_context(
-        self, messages: list[dict[str, Any]], system_prompt: str | None = None
-    ) -> str:
+    def generate_with_context(self, messages: list[dict[str, Any]], system_prompt: str | None = None) -> str:
         response = self.client.messages.create(
             model=self.config.model,
             max_tokens=self.config.max_tokens,
@@ -168,9 +162,7 @@ class OllamaClient(LLMClient):
         response.raise_for_status()
         return str(response.json()["message"]["content"])
 
-    def generate_with_context(
-        self, messages: list[dict[str, Any]], system_prompt: str | None = None
-    ) -> str:
+    def generate_with_context(self, messages: list[dict[str, Any]], system_prompt: str | None = None) -> str:
         import requests
 
         if system_prompt:
@@ -206,10 +198,7 @@ def create_llm_client(config: LLMConfig) -> LLMClient:
 
     client_class = providers.get(config.provider.lower())
     if not client_class:
-        raise ValueError(
-            f"Unsupported LLM provider: {config.provider}. "
-            f"Supported: {', '.join(providers.keys())}"
-        )
+        raise ValueError(f"Unsupported LLM provider: {config.provider}. Supported: {', '.join(providers.keys())}")
 
     return client_class(config)
 
@@ -219,9 +208,7 @@ def get_default_llm() -> LLMClient:
     """Get default LLM client from environment variables."""
     # Check for available API keys in order of preference
     if os.getenv("OPENAI_API_KEY"):
-        return create_llm_client(
-            LLMConfig(provider="openai", model="gpt-4o", api_key=os.getenv("OPENAI_API_KEY", ""))
-        )
+        return create_llm_client(LLMConfig(provider="openai", model="gpt-4o", api_key=os.getenv("OPENAI_API_KEY", "")))
     elif os.getenv("ANTHROPIC_API_KEY"):
         return create_llm_client(
             LLMConfig(

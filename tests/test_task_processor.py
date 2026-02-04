@@ -1,6 +1,5 @@
 """Tests for task processor module."""
 
-
 from src.task_processor import (
     Task,
     filter_actionable_tasks,

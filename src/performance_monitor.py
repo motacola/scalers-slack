@@ -190,9 +190,7 @@ class PerformanceMonitor:
         lines.append("")
 
         # Sort by total time spent
-        sorted_ops = sorted(
-            self.operation_stats.items(), key=lambda x: x[1]["total_duration_ms"], reverse=True
-        )
+        sorted_ops = sorted(self.operation_stats.items(), key=lambda x: x[1]["total_duration_ms"], reverse=True)
 
         lines.append("Top Operations by Time:")
         lines.append("-" * 60)

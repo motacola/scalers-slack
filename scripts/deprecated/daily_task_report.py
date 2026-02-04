@@ -17,9 +17,7 @@ from pathlib import Path
 from typing import Any, cast
 
 warnings.warn(
-    "daily_task_report.py is deprecated. Use scripts/dm_daily_digest.py instead.",
-    DeprecationWarning,
-    stacklevel=2
+    "daily_task_report.py is deprecated. Use scripts/dm_daily_digest.py instead.", DeprecationWarning, stacklevel=2
 )
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
