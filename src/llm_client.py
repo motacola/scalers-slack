@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -36,7 +37,7 @@ class LLMClient(ABC):
 
     @abstractmethod
     def generate_with_context(
-        self, messages: list[dict[str, str]], system_prompt: str | None = None
+        self, messages: list[dict[str, Any]], system_prompt: str | None = None
     ) -> str:
         """Generate text with conversation context."""
         pass
@@ -59,14 +60,14 @@ class OpenAIClient(LLMClient):
             raise ImportError("openai package not installed. Run: pip install openai")
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, Any]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
         response = self.client.chat.completions.create(
             model=self.config.model,
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
@@ -74,14 +75,14 @@ class OpenAIClient(LLMClient):
         return str(content) if content else ""
 
     def generate_with_context(
-        self, messages: list[dict[str, str]], system_prompt: str | None = None
+        self, messages: list[dict[str, Any]], system_prompt: str | None = None
     ) -> str:
         if system_prompt:
             messages = [{"role": "system", "content": system_prompt}] + messages
 
         response = self.client.chat.completions.create(
             model=self.config.model,
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
@@ -113,19 +114,27 @@ class AnthropicClient(LLMClient):
             system=system_prompt or "",
             messages=[{"role": "user", "content": prompt}],
         )
-        return str(response.content[0].text)
+        # Extract text from first content block (safely handle different block types)
+        first_block = response.content[0]
+        if hasattr(first_block, "text"):
+            return str(first_block.text)
+        return ""
 
     def generate_with_context(
-        self, messages: list[dict[str, str]], system_prompt: str | None = None
+        self, messages: list[dict[str, Any]], system_prompt: str | None = None
     ) -> str:
         response = self.client.messages.create(
             model=self.config.model,
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             system=system_prompt or "",
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
         )
-        return str(response.content[0].text)
+        # Extract text from first content block (safely handle different block types)
+        first_block = response.content[0]
+        if hasattr(first_block, "text"):
+            return str(first_block.text)
+        return ""
 
 
 class OllamaClient(LLMClient):
@@ -160,7 +169,7 @@ class OllamaClient(LLMClient):
         return str(response.json()["message"]["content"])
 
     def generate_with_context(
-        self, messages: list[dict[str, str]], system_prompt: str | None = None
+        self, messages: list[dict[str, Any]], system_prompt: str | None = None
     ) -> str:
         import requests
 
