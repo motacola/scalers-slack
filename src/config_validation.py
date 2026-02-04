@@ -5,13 +5,9 @@ from jsonschema import Draft7Validator
 
 SLACK_CHANNEL_RE = re.compile(r"^[CG][A-Z0-9]{8,}$")
 NOTION_ID_RE = re.compile(r"^[0-9a-fA-F]{32}$")
-NOTION_ID_DASHED_RE = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
+NOTION_ID_DASHED_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 NOTION_ID_IN_TEXT_RE = re.compile(r"[0-9a-fA-F]{32}")
-NOTION_ID_DASHED_IN_TEXT_RE = re.compile(
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-)
+NOTION_ID_DASHED_IN_TEXT_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -88,9 +84,7 @@ def validate_config(config: dict) -> list[str]:
         interactive_login = browser_settings.get("interactive_login", True)
         headless = browser_settings.get("headless", True)
         if not storage_state_path and not user_data_dir:
-            errors.append(
-                "settings.browser_automation.enabled requires storage_state_path or user_data_dir"
-            )
+            errors.append("settings.browser_automation.enabled requires storage_state_path or user_data_dir")
         if headless and not interactive_login and not storage_state_path and not user_data_dir:
             errors.append(
                 "settings.browser_automation: headless with interactive_login disabled "

@@ -64,7 +64,6 @@ class ThreadExtractor:
                 continue
             threads[thread_ts].append(message)
 
-
         return [self._summarize_thread(thread_ts, items, channel_id=channel_id) for thread_ts, items in threads.items()]
 
     def _summarize_thread(self, thread_ts: str, items: list[dict], channel_id: str | None = None) -> Thread:
@@ -100,4 +99,3 @@ class ThreadExtractor:
             reply_count=reply_count,
             permalink=first.get("permalink"),
         )
-

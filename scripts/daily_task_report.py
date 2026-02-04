@@ -60,7 +60,7 @@ def _is_ticket_complete(text: str) -> bool:
 def _build_browser_config(settings: dict[str, Any]) -> BrowserAutomationConfig:
     return BrowserAutomationConfig(
         enabled=True,
-        storage_state_path=settings.get("storage_state_path", "browser_storage_state.json"),
+        storage_state_path=settings.get("storage_state_path", "config/browser_storage_state.json"),
         headless=settings.get("headless", False),
         slow_mo_ms=int(settings.get("slow_mo_ms", 0) or 0),
         timeout_ms=int(settings.get("timeout_ms", 30000) or 30000),
@@ -76,7 +76,7 @@ def _build_browser_config(settings: dict[str, Any]) -> BrowserAutomationConfig:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Daily Slack task report (CSV)")
-    parser.add_argument("--config", default="config.json", help="Path to config.json")
+    parser.add_argument("--config", default="config/config.json", help="Path to config.json")
     parser.add_argument("--date", help="Date (YYYY-MM-DD). Defaults to today in local timezone.")
     parser.add_argument("--output", default="output/daily_task_report.csv", help="CSV output path")
     parser.add_argument(
@@ -229,6 +229,7 @@ def main() -> int:
     output_dir = output_path.rsplit("/", 1)[0] if "/" in output_path else ""
     if output_dir:
         import os
+
         os.makedirs(output_dir, exist_ok=True)
 
     with open(output_path, "w", newline="", encoding="utf-8") as handle:

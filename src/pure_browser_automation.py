@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class PureBrowserConfig:
     """Configuration for pure browser automation."""
 
-    storage_state_path: str = "browser_storage_state.json"
+    storage_state_path: str = "config/browser_storage_state.json"
     headless: bool = False
     slow_mo_ms: int = 0
     timeout_ms: int = 30000
@@ -96,7 +96,7 @@ class SlackPureBrowserClient:
     def _extract_channel_id_from_url(self) -> str | None:
         """Extract channel ID from current URL."""
         url = self.page.url
-        match = re.search(r'/channels/([A-Z0-9]+)', url)
+        match = re.search(r"/channels/([A-Z0-9]+)", url)
         if match:
             return match.group(1)
         return None
@@ -107,7 +107,7 @@ class SlackPureBrowserClient:
         channel_selectors = [
             f'[data-qa="channel_sidebar_name_{channel_name}"]',
             f'[data-qa*="{channel_name}"]',
-            f'text=#{channel_name}',
+            f"text=#{channel_name}",
         ]
 
         for selector in channel_selectors:
@@ -128,7 +128,7 @@ class SlackPureBrowserClient:
         message_list_selectors = [
             '[data-qa="message_list"]',
             '[data-qa="virtual_list"]',
-            '.c-virtual_list__scroll_container',
+            ".c-virtual_list__scroll_container",
             '[role="main"] .c-message_list',
         ]
 
@@ -416,8 +416,7 @@ class PureBrowserSession:
         if self._is_login_required():
             if self.config.headless:
                 raise RuntimeError(
-                    "Login required but running in headless mode. "
-                    "Please run with headless=false first to authenticate."
+                    "Login required but running in headless mode. Please run with headless=false first to authenticate."
                 )
             self._handle_login()
 
@@ -430,8 +429,8 @@ class PureBrowserSession:
             login_selectors = [
                 '[data-qa="login_email"]',
                 'input[type="email"]',
-                'text=Sign in',
-                '.p-login_page',
+                "text=Sign in",
+                ".p-login_page",
             ]
 
             for selector in login_selectors:
@@ -454,7 +453,7 @@ class PureBrowserSession:
         success_selectors = [
             '[data-qa="team-menu"]',
             '[data-qa="channel_sidebar"]',
-            '.p-workspace__sidebar',
+            ".p-workspace__sidebar",
         ]
 
         start_time = time.time()
@@ -530,7 +529,7 @@ class PureBrowserAutomationManager:
 
 def create_storage_state_interactive(
     workspace_url: str = "https://app.slack.com/client",
-    output_path: str = "browser_storage_state.json",
+    output_path: str = "config/browser_storage_state.json",
 ) -> None:
     """Create browser storage state with interactive login."""
     from playwright.sync_api import sync_playwright
@@ -554,7 +553,7 @@ def create_storage_state_interactive(
         success_selectors = [
             '[data-qa="team-menu"]',
             '[data-qa="channel_sidebar"]',
-            '.p-workspace__sidebar',
+            ".p-workspace__sidebar",
         ]
 
         logged_in = False

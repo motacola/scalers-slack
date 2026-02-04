@@ -28,100 +28,100 @@ MESSAGE_LIST_CONTAINER = SelectorSet(
     primary='[data-qa="virtual_list"]',
     fallbacks=[
         '[data-qa="message_list"]',
-        '.c-virtual_list__scroll_container',
-        '.p-message_pane__virtual_list',
+        ".c-virtual_list__scroll_container",
+        ".p-message_pane__virtual_list",
         '[role="main"] .c-message_list',
-        '.c-message_list',
-    ]
+        ".c-message_list",
+    ],
 )
 
 # Individual message containers
 MESSAGE_CONTAINER = SelectorSet(
     primary='[data-qa="message_container"]',
     fallbacks=[
-        '.c-message',
-        '.c-message--light',
-    ]
+        ".c-message",
+        ".c-message--light",
+    ],
 )
 
 # Message content/text
 MESSAGE_CONTENT = SelectorSet(
     primary='[data-qa="message_content"]',
     fallbacks=[
-        '.c-message__body',
-        '.p-rich_text_section',
-        '.c-message__message_content',
-    ]
+        ".c-message__body",
+        ".p-rich_text_section",
+        ".c-message__message_content",
+    ],
 )
 
 # Message sender/user
 MESSAGE_SENDER = SelectorSet(
     primary='[data-qa="message_sender"]',
     fallbacks=[
-        '.c-message__sender',
-        '.p-classic_nav__model__title',
+        ".c-message__sender",
+        ".p-classic_nav__model__title",
         '[data-qa="message_container"] .c-custom_status',
-    ]
+    ],
 )
 
 # Message timestamp
 MESSAGE_TIMESTAMP = SelectorSet(
-    primary='a[data-ts]',
+    primary="a[data-ts]",
     fallbacks=[
-        'time[data-ts]',
-        'time',
-        '[data-ts]',
-        '.c-timestamp__label',
-    ]
+        "time[data-ts]",
+        "time",
+        "[data-ts]",
+        ".c-timestamp__label",
+    ],
 )
 
 # User avatar (contains user ID)
 USER_AVATAR = SelectorSet(
-    primary='img[data-member-id]',
+    primary="img[data-member-id]",
     fallbacks=[
-        'img[data-user-id]',
-        '.c-avatar img',
+        "img[data-user-id]",
+        ".c-avatar img",
         '[data-qa="message_container"] img',
-    ]
+    ],
 )
 
 # Channel sidebar
 CHANNEL_SIDEBAR = SelectorSet(
     primary='[data-qa="channel_sidebar"]',
     fallbacks=[
-        '.p-workspace__sidebar',
-        '.p-channel_sidebar',
+        ".p-workspace__sidebar",
+        ".p-channel_sidebar",
         '[role="navigation"]',
-    ]
+    ],
 )
 
 # Channel name in header
 CHANNEL_HEADER_NAME = SelectorSet(
     primary='[data-qa="channel_name"]',
     fallbacks=[
-        '.p-classic_nav__model__title',
-        '.p-view_header__title',
-        'h1[data-qa]',
-    ]
+        ".p-classic_nav__model__title",
+        ".p-view_header__title",
+        "h1[data-qa]",
+    ],
 )
 
 # Channel topic
 CHANNEL_TOPIC = SelectorSet(
     primary='[data-qa="channel_topic"]',
     fallbacks=[
-        '.p-classic_nav__model__subtitle',
-        '.p-view_header__subtitle',
-    ]
+        ".p-classic_nav__model__subtitle",
+        ".p-view_header__subtitle",
+    ],
 )
 
 # Search results
 SEARCH_RESULT = SelectorSet(
     primary='[data-qa="search_result"]',
     fallbacks=[
-        '.p-search_result',
-        '.c-search_result',
+        ".p-search_result",
+        ".c-search_result",
         '[data-qa="search_message_result"]',
-    ]
+    ],
 )
 
 # Login indicators
@@ -130,8 +130,8 @@ LOGIN_EMAIL_INPUT = SelectorSet(
     fallbacks=[
         'input[type="email"]',
         'input[name="email"]',
-        '#email',
-    ]
+        "#email",
+    ],
 )
 
 LOGIN_PASSWORD_INPUT = SelectorSet(
@@ -139,45 +139,45 @@ LOGIN_PASSWORD_INPUT = SelectorSet(
     fallbacks=[
         'input[type="password"]',
         'input[name="password"]',
-        '#password',
-    ]
+        "#password",
+    ],
 )
 
 # Logged-in indicators
 TEAM_MENU = SelectorSet(
     primary='[data-qa="team-menu"]',
     fallbacks=[
-        '.p-team_menu',
+        ".p-team_menu",
         '[data-qa="user-button"]',
-        '.p-workspace__top_nav',
-    ]
+        ".p-workspace__top_nav",
+    ],
 )
 
 # Day dividers (date separators)
 DAY_DIVIDER = SelectorSet(
     primary='[data-qa="day_divider"]',
     fallbacks=[
-        '.c-message_list__day_divider',
-        '.p-message_pane__day_divider',
-    ]
+        ".c-message_list__day_divider",
+        ".p-message_pane__day_divider",
+    ],
 )
 
 # Thread replies indicator
 THREAD_REPLIES = SelectorSet(
     primary='[data-qa="thread_replies"]',
     fallbacks=[
-        '.c-message__reply_count',
+        ".c-message__reply_count",
         '[data-qa="reply_count"]',
-    ]
+    ],
 )
 
 # Message actions menu
 MESSAGE_ACTIONS = SelectorSet(
     primary='[data-qa="message_actions_menu"]',
     fallbacks=[
-        '.c-message__actions',
-        '.c-message_actions__container',
-    ]
+        ".c-message__actions",
+        ".c-message_actions__container",
+    ],
 )
 
 
@@ -257,11 +257,7 @@ class DOMExtractor:
             try:
                 avatar = element.locator(selector).first
                 if avatar.is_visible(timeout=1000):
-                    return (
-                        avatar.get_attribute("data-member-id") or
-                        avatar.get_attribute("data-user-id") or
-                        ""
-                    )
+                    return avatar.get_attribute("data-member-id") or avatar.get_attribute("data-user-id") or ""
             except Exception:
                 continue
         return ""
@@ -272,11 +268,7 @@ class DOMExtractor:
             try:
                 ts_el = element.locator(selector).first
                 if ts_el.is_visible(timeout=1000):
-                    return (
-                        ts_el.get_attribute("data-ts") or
-                        ts_el.get_attribute("datetime") or
-                        ""
-                    )
+                    return ts_el.get_attribute("data-ts") or ts_el.get_attribute("datetime") or ""
             except Exception:
                 continue
         return ""
@@ -286,7 +278,7 @@ class DOMExtractor:
         try:
             # Look for timestamp link which contains permalink
             for selector in MESSAGE_TIMESTAMP.get_all():
-                link = element.locator(f'{selector}[href]').first
+                link = element.locator(f"{selector}[href]").first
                 if link.is_visible(timeout=1000):
                     href = link.get_attribute("href")
                     if href:

@@ -10,20 +10,15 @@ DEFAULT_CONFIG = {
             "base_url": "https://slack.com/api",
             "default_channel_id": "",
             "timeout_seconds": 30,
-            "pagination": {
-                "history_limit": 200,
-                "history_max_pages": 5,
-                "search_limit": 100,
-                "search_max_pages": 3
-            },
+            "pagination": {"history_limit": 200, "history_max_pages": 5, "search_limit": 100, "search_max_pages": 3},
             "retries": {
                 "max_attempts": 5,
                 "backoff_base": 0.5,
                 "backoff_max": 8.0,
                 "jitter": 0.25,
                 "retry_on_status": [408, 429, 500, 502, 503, 504],
-                "retry_on_network_error": True
-            }
+                "retry_on_network_error": True,
+            },
         },
         "notion": {
             "token_env": "NOTION_API_KEY",
@@ -36,25 +31,21 @@ DEFAULT_CONFIG = {
                 "jitter": 0.25,
                 "retry_on_status": [408, 429, 500, 502, 503, 504],
                 "retry_on_network_error": True,
-                "retry_non_idempotent": False
-            }
+                "retry_non_idempotent": False,
+            },
         },
         "features": {
             "enable_notion_audit_note": True,
             "enable_notion_last_synced": True,
             "enable_slack_topic_update": True,
             "enable_audit": True,
-            "enable_run_id_idempotency": True
+            "enable_run_id_idempotency": True,
         },
         "validate_config_on_startup": True,
-        "logging": {
-            "json": True,
-            "level": "INFO",
-            "run_report_dir": "output/run_reports"
-        },
+        "logging": {"json": True, "level": "INFO", "run_report_dir": "output/run_reports"},
         "browser_automation": {
             "enabled": False,
-            "storage_state_path": "browser_storage_state.json",
+            "storage_state_path": "config/browser_storage_state.json",
             "headless": True,
             "slow_mo_ms": 0,
             "timeout_ms": 30000,
@@ -80,7 +71,7 @@ DEFAULT_CONFIG = {
             "html_snapshot_on_error": True,
             "event_log_path": "output/browser_events.jsonl",
             "screenshot_on_step": False,
-            "screenshot_on_error": True
+            "screenshot_on_error": True,
         },
         "audit": {
             "enabled": True,
@@ -89,17 +80,15 @@ DEFAULT_CONFIG = {
             "jsonl_path": "audit/audit.jsonl",
             "notion_audit_page_id": "",
             "notion_last_synced_page_id": "",
-            "notion_last_synced_property": "Last Synced"
-        }
+            "notion_last_synced_property": "Last Synced",
+        },
     },
-    "projects": []
+    "projects": [],
 }
 
 ENV_VAR_PATTERN = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 NOTION_ID_RE = re.compile(r"[0-9a-fA-F]{32}")
-NOTION_ID_DASHED_RE = re.compile(
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-)
+NOTION_ID_DASHED_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
 
 def _resolve_env_placeholder(value: str) -> str:
@@ -172,7 +161,6 @@ def load_config(config_path: str) -> dict[str, Any]:
     resolved = _resolve_env_in_config(config)
     normalized = _normalize_notion_ids(resolved)
     return cast(dict[str, Any], normalized)
-
 
 
 def get_project(config: dict[str, Any], name: str) -> dict[str, Any] | None:

@@ -13,33 +13,33 @@ logger = logging.getLogger(__name__)
 
 class LoadBalancer:
     """Manages load balancing for distributed environments."""
-    
+
     def __init__(self, max_workers: int = 5):
         self.max_workers = max_workers
         self.workers: list[str] = []
         self.active_workers = 0
-    
+
     def add_worker(self, worker_id: str):
         """Add a worker to the load balancer.
-        
+
         Args:
             worker_id: The ID of the worker to add.
         """
         if worker_id not in self.workers:
             self.workers.append(worker_id)
-    
+
     def remove_worker(self, worker_id: str):
         """Remove a worker from the load balancer.
-        
+
         Args:
             worker_id: The ID of the worker to remove.
         """
         if worker_id in self.workers:
             self.workers.remove(worker_id)
-    
+
     def get_available_worker(self) -> str | None:
         """Get an available worker for processing.
-        
+
         Returns:
             str | None: The ID of an available worker, or None if no workers are available.
         """
@@ -48,23 +48,23 @@ class LoadBalancer:
             self.active_workers += 1
             return worker
         return None
-    
+
     def release_worker(self):
         """Release a worker after processing."""
         if self.active_workers > 0:
             self.active_workers -= 1
-    
+
     def get_worker_count(self) -> int:
         """Get the number of available workers.
-        
+
         Returns:
             int: The number of available workers.
         """
         return len(self.workers)
-    
+
     def get_active_worker_count(self) -> int:
         """Get the number of active workers.
-        
+
         Returns:
             int: The number of active workers.
         """
@@ -73,15 +73,15 @@ class LoadBalancer:
 
 class ScalabilityManager:
     """Manages optimizations for handling larger datasets and higher traffic."""
-    
+
     def __init__(self, max_concurrent_sessions: int = 5, batch_size: int = 100):
         self.max_concurrent_sessions = max_concurrent_sessions
         self.batch_size = batch_size
         self.active_sessions = 0
-    
+
     def acquire_session(self) -> bool:
         """Acquire a session slot for concurrent operations.
-        
+
         Returns:
             bool: True if a session slot is available, False otherwise.
         """
@@ -89,26 +89,26 @@ class ScalabilityManager:
             self.active_sessions += 1
             return True
         return False
-    
+
     def release_session(self):
         """Release a session slot after operation completion."""
         if self.active_sessions > 0:
             self.active_sessions -= 1
-    
+
     def get_batch_size(self) -> int:
         """Get the recommended batch size for operations.
-        
+
         Returns:
             int: The recommended batch size.
         """
         return self.batch_size
-    
+
     def optimize_batch_size(self, data_size: int) -> int:
         """Optimize the batch size based on the dataset size.
-        
+
         Args:
             data_size: The size of the dataset.
-            
+
         Returns:
             int: The optimized batch size.
         """
@@ -131,7 +131,7 @@ class PerformanceMetrics(TypedDict):
 
 class PerformanceMonitor:
     """Monitors and tracks the performance of sync operations."""
-    
+
     def __init__(self):
         self.metrics: PerformanceMetrics = {
             "sync_operations": 0,
@@ -142,14 +142,14 @@ class PerformanceMonitor:
             "bottlenecks": [],
         }
         self.start_time: float = 0.0
-    
+
     def start_monitoring(self):
         """Start monitoring a sync operation."""
         self.start_time = time.time()
-    
+
     def stop_monitoring(self, success: bool, operation_name: str | None = None):
         """Stop monitoring a sync operation and record metrics.
-        
+
         Args:
             success: Whether the operation was successful.
             operation_name: The name of the operation being monitored.
@@ -160,39 +160,41 @@ class PerformanceMonitor:
         elapsed_time = time.time() - self.start_time
         self.metrics["total_time_ms"] += elapsed_time * 1000
         self.metrics["sync_operations"] += 1
-        
+
         if success:
             self.metrics["successful_operations"] += 1
         else:
             self.metrics["failed_operations"] += 1
-        
+
         if self.metrics["sync_operations"] > 0:
             self.metrics["average_time_ms"] = self.metrics["total_time_ms"] / self.metrics["sync_operations"]
-        
+
         # Identify bottlenecks
         if operation_name and elapsed_time > 5:  # Threshold for identifying bottlenecks
-            self.metrics["bottlenecks"].append({
-                "operation": operation_name,
-                "time_ms": elapsed_time * 1000,
-                "timestamp": time.time(),
-            })
-    
+            self.metrics["bottlenecks"].append(
+                {
+                    "operation": operation_name,
+                    "time_ms": elapsed_time * 1000,
+                    "timestamp": time.time(),
+                }
+            )
+
     def get_metrics(self) -> PerformanceMetrics:
         """Get the current performance metrics.
-        
+
         Returns:
             dict: A dictionary containing the performance metrics.
         """
         return self.metrics.copy()
-    
+
     def get_bottlenecks(self) -> list[dict[str, Any]]:
         """Get a list of identified bottlenecks.
-        
+
         Returns:
             list: A list of dictionaries containing bottleneck information.
         """
         return self.metrics["bottlenecks"]
-    
+
     def reset(self):
         """Reset all performance metrics."""
         self.metrics = {
@@ -208,29 +210,29 @@ class PerformanceMonitor:
 
 class RecoveryManager:
     """Manages automatic recovery mechanisms for common failure scenarios."""
-    
+
     def __init__(self, max_retries: int = 3, retry_delay_ms: int = 1000):
         self.max_retries = max_retries
         self.retry_delay_ms = retry_delay_ms
         self.recovery_attempts = 0
-    
+
     def handle_failure(self, error: Exception, recovery_action: Callable[[], None]) -> bool:
         """Attempt to recover from a failure by executing a recovery action.
-        
+
         Args:
             error: The exception that caused the failure.
             recovery_action: A callable that attempts to recover from the failure.
-            
+
         Returns:
             bool: True if recovery was successful, False otherwise.
         """
         self.recovery_attempts += 1
         logger.warning(f"Attempting recovery from failure (attempt {self.recovery_attempts}): {error}")
-        
+
         if self.recovery_attempts > self.max_retries:
             logger.error(f"Max recovery attempts ({self.max_retries}) exceeded for error: {error}")
             return False
-        
+
         try:
             time.sleep(self.retry_delay_ms / 1000)
             recovery_action()
@@ -240,10 +242,11 @@ class RecoveryManager:
         except Exception as e:
             logger.error(f"Recovery failed: {e}")
             return False
-    
+
     def reset(self):
         """Reset the recovery attempts counter."""
         self.recovery_attempts = 0
+
 
 _sync_playwright: Any = None
 try:
@@ -294,15 +297,9 @@ class BrowserSession:
         self._playwright: Any = None
         self._browser: Any = None
         self._context: Any = None
-        self.recovery_manager = RecoveryManager(
-            max_retries=config.max_retries,
-            retry_delay_ms=config.retry_delay_ms
-        )
+        self.recovery_manager = RecoveryManager(max_retries=config.max_retries, retry_delay_ms=config.retry_delay_ms)
         self.performance_monitor = PerformanceMonitor()
-        self.scalability_manager = ScalabilityManager(
-            max_concurrent_sessions=5,
-            batch_size=100
-        )
+        self.scalability_manager = ScalabilityManager(max_concurrent_sessions=5, batch_size=100)
         self.load_balancer = LoadBalancer(max_workers=5)
         self._step_counter = 0
 
@@ -319,8 +316,7 @@ class BrowserSession:
             and (self.config.headless or not self.config.interactive_login)
         ):
             raise RuntimeError(
-                "Browser storage state not found. "
-                "Create it with scripts/create_storage_state.py to avoid re-login."
+                "Browser storage state not found. Create it with scripts/create_storage_state.py to avoid re-login."
             )
 
         def recovery_action():
@@ -741,8 +737,7 @@ class SlackBrowserClient:
         page = self.session.new_page(self._slack_client_home())
         try:
             logger.warning(
-                "Slack login required. Complete login in the opened browser window "
-                "(waiting up to %s seconds).",
+                "Slack login required. Complete login in the opened browser window (waiting up to %s seconds).",
                 int(self.config.interactive_login_timeout_ms / 1000),
             )
             page.wait_for_selector(
@@ -976,8 +971,7 @@ class NotionBrowserClient:
                         "with scripts/create_storage_state.py to avoid re-login."
                     )
                 logger.warning(
-                    "Notion login required. Complete login in the opened browser window "
-                    "(waiting up to %s seconds).",
+                    "Notion login required. Complete login in the opened browser window (waiting up to %s seconds).",
                     int(self.config.interactive_login_timeout_ms / 1000),
                 )
             try:
@@ -1024,9 +1018,7 @@ class NotionBrowserClient:
             label = page.get_by_text(property_name, exact=True)
             label.wait_for(timeout=10000)
 
-            row = label.locator(
-                "xpath=ancestor::div[@role='row' or @role='listitem' or @data-property-id][1]"
-            )
+            row = label.locator("xpath=ancestor::div[@role='row' or @role='listitem' or @data-property-id][1]")
             if row.count() == 0:
                 row = label.locator("xpath=..")
 

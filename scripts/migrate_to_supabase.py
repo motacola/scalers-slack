@@ -20,9 +20,10 @@ if not SUPABASE_KEY:
     print("   SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...")
     exit(1)
 
+
 def main():
     print("🚀 Starting migration to Supabase...")
-    
+
     # Initialize Supabase client
     try:
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -44,7 +45,7 @@ def main():
         updated_at TIMESTAMPTZ DEFAULT now()
     );
     """
-    
+
     print("📦 Creating projects table...")
     try:
         supabase.rpc("exec_sql", {"query": create_table_sql}).execute()
@@ -68,23 +69,20 @@ def main():
     # 3. Insert each project using the Supabase client
     success_count = 0
     error_count = 0
-    
+
     for p in projects:
         project_data = {
             "name": p.get("name", ""),
             "slack_channel_id": p.get("slack_channel_id", ""),
             "notion_page_url": p.get("notion_page_url", ""),
             "notion_audit_page_id": p.get("notion_audit_page_id", ""),
-            "notion_last_synced_page_id": p.get("notion_last_synced_page_id", "")
+            "notion_last_synced_page_id": p.get("notion_last_synced_page_id", ""),
         }
-        
+
         try:
             # Use upsert to insert or update if exists
-            supabase.table('projects').upsert(
-                project_data,
-                on_conflict='name'
-            ).execute()
-            
+            supabase.table("projects").upsert(project_data, on_conflict="name").execute()
+
             print(f"✓ Synced: {project_data['name']}")
             success_count += 1
         except Exception as e:
@@ -95,6 +93,7 @@ def main():
     print(f"   ✓ Success: {success_count}")
     if error_count > 0:
         print(f"   ✗ Errors: {error_count}")
+
 
 if __name__ == "__main__":
     main()

@@ -48,7 +48,7 @@ def _build_browser_config(settings: dict[str, Any]) -> BrowserAutomationConfig:
     """Build browser automation config from settings."""
     return BrowserAutomationConfig(
         enabled=True,
-        storage_state_path=settings.get("storage_state_path", "browser_storage_state.json"),
+        storage_state_path=settings.get("storage_state_path", "config/browser_storage_state.json"),
         headless=settings.get("headless", False),
         slow_mo_ms=int(settings.get("slow_mo_ms", 0) or 0),
         timeout_ms=int(settings.get("timeout_ms", 30000) or 30000),
@@ -109,20 +109,18 @@ def fetch_messages_with_cache(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Enhanced daily Slack task report")
-    parser.add_argument("--config", default="config.json", help="Path to config.json")
+    parser.add_argument("--config", default="config/config.json", help="Path to config.json")
     parser.add_argument("--date", help="Date (YYYY-MM-DD). Defaults to today.")
     parser.add_argument("--output", default="output/daily_task_report", help="Output path (without extension)")
-    parser.add_argument("--format", choices=["csv", "json", "markdown", "html", "all"], default="all",
-                        help="Output format")
-    parser.add_argument("--group-by", choices=["owner", "client", "none"], default="owner",
-                        help="Group tasks by")
+    parser.add_argument(
+        "--format", choices=["csv", "json", "markdown", "html", "all"], default="all", help="Output format"
+    )
+    parser.add_argument("--group-by", choices=["owner", "client", "none"], default="owner", help="Group tasks by")
     parser.add_argument("--channels", help="Comma-separated channel names (overrides defaults)")
     parser.add_argument("--project-channels", help="Comma-separated project channel names")
-    parser.add_argument("--include-mentions-search", action="store_true",
-                        help="Include mentions search")
+    parser.add_argument("--include-mentions-search", action="store_true", help="Include mentions search")
     parser.add_argument("--team-members", help="Comma-separated team member names")
-    parser.add_argument("--actionable-only", action="store_true",
-                        help="Only include actionable tasks")
+    parser.add_argument("--actionable-only", action="store_true", help="Only include actionable tasks")
     parser.add_argument("--cache-dir", default=".cache", help="Cache directory")
     parser.add_argument("--cache-ttl", type=int, default=3600, help="Cache TTL in seconds")
     parser.add_argument("--no-cache", action="store_true", help="Disable caching")

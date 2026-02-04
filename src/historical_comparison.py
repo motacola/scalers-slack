@@ -141,36 +141,46 @@ def generate_comparison_report(
     ]
 
     if changes.new_tasks:
-        lines.extend([
-            "## 🆕 New Tasks",
-            "",
-        ])
-        for task in changes.new_tasks:
-            lines.extend([
-                f"### {task.owner or 'Unknown'}",
-                f"- {task.text}",
-                f"  - **Client:** {task.client}",
-                f"  - **Priority:** {task.priority}",
-                f"  - **Channel:** {task.channel}",
+        lines.extend(
+            [
+                "## 🆕 New Tasks",
                 "",
-            ])
+            ]
+        )
+        for task in changes.new_tasks:
+            lines.extend(
+                [
+                    f"### {task.owner or 'Unknown'}",
+                    f"- {task.text}",
+                    f"  - **Client:** {task.client}",
+                    f"  - **Priority:** {task.priority}",
+                    f"  - **Channel:** {task.channel}",
+                    "",
+                ]
+            )
 
     if changes.completed_tasks:
-        lines.extend([
-            "## ✅ Completed Tasks",
-            "",
-        ])
-        for task in changes.completed_tasks:
-            lines.extend([
-                f"- ~~{task.text}~~ (was: {task.owner})",
+        lines.extend(
+            [
+                "## ✅ Completed Tasks",
                 "",
-            ])
+            ]
+        )
+        for task in changes.completed_tasks:
+            lines.extend(
+                [
+                    f"- ~~{task.text}~~ (was: {task.owner})",
+                    "",
+                ]
+            )
 
     if changes.updated_tasks:
-        lines.extend([
-            "## 📝 Updated Tasks",
-            "",
-        ])
+        lines.extend(
+            [
+                "## 📝 Updated Tasks",
+                "",
+            ]
+        )
         for old, new in changes.updated_tasks:
             lines.append(f"### {new.owner or 'Unknown'}")
             lines.append(f"- {new.text}")

@@ -44,7 +44,7 @@ def _pick_notion_page_id(config: dict) -> str | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Browser automation health check")
-    parser.add_argument("--config", default="config.json", help="Path to config.json")
+    parser.add_argument("--config", default="config/config.json", help="Path to config.json")
     args = parser.parse_args()
 
     config = load_config(args.config)

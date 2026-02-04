@@ -51,25 +51,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Daily Slack task report v2 - Enhanced with filtering and multiple formats"
     )
-    parser.add_argument("--config", default="config/daily_report_defaults.json",
-                        help="Path to configuration file")
+    parser.add_argument("--config", default="config/daily_report_defaults.json", help="Path to configuration file")
     parser.add_argument("--date", help="Date (YYYY-MM-DD). Defaults to today.")
-    parser.add_argument("--output", default="output/daily_task_report",
-                        help="Output path (without extension)")
-    parser.add_argument("--format", choices=["csv", "json", "markdown", "html", "all"],
-                        default=None, help="Output format (overrides config)")
-    parser.add_argument("--group-by", choices=["owner", "client", "none"],
-                        default=None, help="Group tasks by (overrides config)")
+    parser.add_argument("--output", default="output/daily_task_report", help="Output path (without extension)")
+    parser.add_argument(
+        "--format",
+        choices=["csv", "json", "markdown", "html", "all"],
+        default=None,
+        help="Output format (overrides config)",
+    )
+    parser.add_argument(
+        "--group-by", choices=["owner", "client", "none"], default=None, help="Group tasks by (overrides config)"
+    )
     parser.add_argument("--channels", help="Comma-separated channel names (overrides config)")
     parser.add_argument("--project-channels", help="Comma-separated project channel names")
-    parser.add_argument("--include-mentions-search", action="store_true",
-                        help="Include mentions search")
+    parser.add_argument("--include-mentions-search", action="store_true", help="Include mentions search")
     parser.add_argument("--team-members", help="Comma-separated team member names")
-    parser.add_argument("--actionable-only", action="store_true",
-                        help="Only include actionable tasks")
+    parser.add_argument("--actionable-only", action="store_true", help="Only include actionable tasks")
     parser.add_argument("--no-cache", action="store_true", help="Disable caching")
-    parser.add_argument("--compare", action="store_true",
-                        help="Generate comparison with previous day")
+    parser.add_argument("--compare", action="store_true", help="Generate comparison with previous day")
     parser.add_argument("--headless", action="store_true", help="Run browser in headless mode")
 
     args = parser.parse_args()
@@ -103,8 +103,10 @@ def main() -> int:
         print(f"  - {ch}")
 
     # Initialize cache
-    cache = None if args.no_cache or not config.cache.enabled else CacheManager(
-        config.cache.directory, config.cache.ttl_seconds
+    cache = (
+        None
+        if args.no_cache or not config.cache.enabled
+        else CacheManager(config.cache.directory, config.cache.ttl_seconds)
     )
 
     # Initialize browser automation
@@ -160,8 +162,7 @@ def main() -> int:
 
                         # Process message into task
                         task = process_message(
-                            msg, channel_name, user_name,
-                            set(config.team_members) if config.team_members else None
+                            msg, channel_name, user_name, set(config.team_members) if config.team_members else None
                         )
                         if task:
                             tasks.append(task)
@@ -199,8 +200,7 @@ def main() -> int:
 
                             user_name = msg.get("username") or msg.get("user") or "unknown"
                             task = process_message(
-                                msg, channel_name, user_name,
-                                set(config.team_members) if config.team_members else None
+                                msg, channel_name, user_name, set(config.team_members) if config.team_members else None
                             )
                             if task:
                                 tasks.append(task)

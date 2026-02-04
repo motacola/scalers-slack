@@ -28,10 +28,12 @@ def _coerce_int(value: object, default: int) -> int:
         return default
 
 
-def _build_browser_config(settings: dict[str, Any], *, headless_override: bool | None = None) -> BrowserAutomationConfig:
+def _build_browser_config(
+    settings: dict[str, Any], *, headless_override: bool | None = None
+) -> BrowserAutomationConfig:
     return BrowserAutomationConfig(
         enabled=True,
-        storage_state_path=settings.get("storage_state_path", "browser_storage_state.json"),
+        storage_state_path=settings.get("storage_state_path", "config/browser_storage_state.json"),
         headless=bool(headless_override) if headless_override is not None else bool(settings.get("headless", False)),
         slow_mo_ms=_coerce_int(settings.get("slow_mo_ms"), 0),
         timeout_ms=_coerce_int(settings.get("timeout_ms"), 30000),
@@ -48,7 +50,7 @@ def _build_browser_config(settings: dict[str, Any], *, headless_override: bool |
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Friendly daily digest from Slack (browser automation; no posting)")
-    parser.add_argument("--config", default="config.json", help="Path to config.json")
+    parser.add_argument("--config", default="config/config.json", help="Path to config.json")
     parser.add_argument("--hours", type=int, default=24, help="Lookback window in hours")
     parser.add_argument(
         "--headless",
@@ -68,7 +70,9 @@ def main() -> int:
         action="store_true",
         help="Also include DMs (useful, but usually noisier)",
     )
-    parser.add_argument("--max-dms", type=int, default=60, help="Max DM conversations to scan (when --include-dms is set)")
+    parser.add_argument(
+        "--max-dms", type=int, default=60, help="Max DM conversations to scan (when --include-dms is set)"
+    )
     parser.add_argument(
         "--important",
         action="store_true",
@@ -127,7 +131,9 @@ def main() -> int:
         ext = "html" if args.format == "html" else "md"
         out_path = f"output/dm_daily_digest_{stamp}.{ext}"
 
-    session = BrowserSession(_build_browser_config(browser_settings, headless_override=(True if args.headless else None)))
+    session = BrowserSession(
+        _build_browser_config(browser_settings, headless_override=(True if args.headless else None))
+    )
     slack = SlackBrowserClient(session, session.config)
 
     tasks: list[Task] = []
@@ -224,7 +230,7 @@ def main() -> int:
                 if dm.get("is_im") and dm.get("user"):
                     dm_label = f"dm--{resolve_user_name(cast(str, dm.get('user')))}"
                 elif dm.get("is_mpim"):
-                    dm_label = f"dm--group"
+                    dm_label = "dm--group"
 
                 scan_channel(channel_id=channel_id, label=dm_label)
 

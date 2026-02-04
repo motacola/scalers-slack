@@ -80,9 +80,9 @@ Audit logs are written to `audit/audit.db` by default. If SQLite is unavailable 
 falls back to `audit/audit.jsonl` so you always have a record of what ran and what changed.
 
 ## Configuration
-Edit `config.json` to set channels and Notion pages. The `audit` settings control storage paths.
+Edit `config/config.json` to set channels and Notion pages. The `audit` settings control storage paths.
 Use `settings.slack.pagination` for defaults and `projects[].slack_pagination` to cap page counts per channel.
-High-traffic channels can be tightened further (some presets are already applied in `config.json`).
+High-traffic channels can be tightened further (some presets are already applied in `config/config.json`).
 Use `settings.slack.retries` / `settings.notion.retries` to adjust retry behavior and rate-limit handling.
 
 The sync run uses a deterministic Run ID (based on project, since/query, and date) to avoid duplicate Notion writes.
@@ -109,7 +109,7 @@ Each project can override these flags by adding the same keys to the project obj
 Config validation runs on startup (set `settings.validate_config_on_startup` to `false` to skip).
 If Notion page IDs are not yet configured, keep `enable_notion_audit_note` / `enable_notion_last_synced` disabled to avoid validation failures.
 
-You can source Notion page IDs from environment variables to avoid editing `config.json` daily:
+You can source Notion page IDs from environment variables to avoid editing `config/config.json` daily:
 ```json
 "notion_audit_page_id": "env:NOTION_AUDIT_PAGE_ID",
 "notion_last_synced_page_id": "${NOTION_LAST_SYNCED_PAGE_ID}"
@@ -122,15 +122,15 @@ python -m src.engine --validate-config
 ```
 
 ### Browser Automation Fallback
-If API keys are not available, enable the browser fallback in `config.json`:
+If API keys are not available, enable the browser fallback in `config/config.json`:
 ```json
 \"browser_automation\": {
   \"enabled\": true,
-  \"storage_state_path\": \"browser_storage_state.json\",
+  \"storage_state_path\": \"config/browser_storage_state.json\",
   \"slack_workspace_id\": \"TBLCQAFEG\",
   \"headless\": false,
   \"browser_channel\": \"chrome\",
-  \"user_data_dir\": \"./chrome_profile\",
+  \"user_data_dir\": \"./.cache/browser/chrome_profile\",
   \"verbose_logging\": false,
   \"keep_open\": false,
   \"interactive_login\": true,
@@ -148,7 +148,7 @@ If API keys are not available, enable the browser fallback in `config.json`:
 
 Create a storage state file by logging into Slack/Notion in an automated browser session:
 ```bash
-python -m playwright codegen --save-storage browser_storage_state.json https://app.slack.com/client/TBLCQAFEG
+python -m playwright codegen --save-storage config/browser_storage_state.json https://app.slack.com/client/TBLCQAFEG
 ```
 
 Or refresh it interactively during a run:
@@ -158,12 +158,12 @@ python -m src.engine --project <name> --headed --refresh-storage-state
 
 Use Chrome with a persistent profile directory:
 ```bash
-python -m src.engine --project <name> --headed --browser-channel chrome --user-data-dir ./chrome_profile
+python -m src.engine --project <name> --headed --browser-channel chrome --user-data-dir ./.cache/browser/chrome_profile
 ```
 
 Run a quick health check:
 ```bash
-python scripts/browser_health_check.py --config config.json
+python scripts/browser_health_check.py --config config/config.json
 ```
 
 Notes:
