@@ -1,0 +1,36 @@
+[bandit]
+# Bandit security scanner configuration
+# https://bandit.readthedocs.io/
+
+# Test IDs to skip (with justification):
+# B101: assert_used - We use asserts in tests which is expected
+# B603: subprocess_without_shell_equals_true - We need shell=True for some legitimate use cases
+skips = B101
+
+# Exclude paths
+exclude_dirs =
+    /tests/,
+    /.venv/,
+    /venv/,
+    /.cache/,
+    /output/,
+    /scripts/deprecated/
+
+# Confidence levels: LOW, MEDIUM, HIGH
+# Severity levels: LOW, MEDIUM, HIGH
+
+# Only report issues of medium severity or higher
+severity = MEDIUM
+
+# Only report issues of medium confidence or higher
+confidence = MEDIUM
+
+# File extensions to scan
+include = *.py
+
+# Specific tests to run (leave empty to run all)
+tests =
+
+# Output format options: csv, custom, html, json, screen, txt, xml, yaml
+# Use 'screen' for colored terminal output
+# format = screen

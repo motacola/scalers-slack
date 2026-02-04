@@ -14,6 +14,7 @@ scalers-health = "scripts.browser_health_check:main"
 scalers-migrate = "scripts.migrate_to_supabase:main"
 scalers-setup = "scripts.create_storage_state:main"
 scalers-validate = "scripts.validate_config:main"
+scalers-security = "scripts.security_scan:main"
 
 [project.optional-dependencies]
 dev = [

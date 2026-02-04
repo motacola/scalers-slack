@@ -83,8 +83,11 @@ watch-test:  ## Run tests in watch mode
 typecheck:  ## Run type checking only
 	mypy src
 
-security-check:  ## Run security checks
-	bandit -r src/ -ll
+security-check:  ## Run comprehensive security scan
+	python3 scripts/security_scan.py
+
+security-quick:  ## Run quick security scan (bandit only)
+	bandit -r src/ -c .bandit -f screen
 
 update-deps:  ## Update all dependencies
 	pip install --upgrade pip
