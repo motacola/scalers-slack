@@ -47,7 +47,7 @@ class BrowserAutomationConfig:
     timeout_ms: int = 30000
     max_retries: int = 3
     retry_delay_ms: int = 1000
-    storage_state_path: str = "browser_storage_state.json"
+    storage_state_path: str = "config/browser_storage_state.json"
     slack_workspace_id: str = ""
     slack_client_url: str = "https://app.slack.com/client"
     slack_api_base_url: str = "https://slack.com/api"

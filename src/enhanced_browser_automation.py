@@ -94,7 +94,7 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
         try:
             current_url = page.url
             # Look for channel ID pattern in URL
-            match = re.search(r'[CD][A-Z0-9]{8,}', current_url)
+            match = re.search(r"[CD][A-Z0-9]{8,}", current_url)
             if match:
                 return match.group(0)
         except Exception:
@@ -213,12 +213,14 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
             }""")
 
             for msg_data in messages_data[:count]:
-                results.append({
-                    "text": msg_data.get("text", ""),
-                    "username": msg_data.get("user", "unknown"),
-                    "ts": msg_data.get("ts", ""),
-                    "channel": {"name": "search_result"},
-                })
+                results.append(
+                    {
+                        "text": msg_data.get("text", ""),
+                        "username": msg_data.get("user", "unknown"),
+                        "ts": msg_data.get("ts", ""),
+                        "channel": {"name": "search_result"},
+                    }
+                )
 
         except Exception as e:
             logger.error(f"Browser search extraction failed: {e}")
@@ -332,7 +334,7 @@ class BrowserAutomationManager:
 
 
 def create_storage_state_interactive(
-    output_path: str = "browser_storage_state.json",
+    output_path: str = "config/browser_storage_state.json",
     headless: bool = False,
 ) -> None:
     """Create browser storage state with interactive login."""

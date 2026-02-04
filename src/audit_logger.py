@@ -179,6 +179,7 @@ class AuditLogger:
             return False
 
         return False
+
     def get_user_name(self, user_id: str) -> str | None:
         if not self.enabled or not self._db_initialized:
             return None

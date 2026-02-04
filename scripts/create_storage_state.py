@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create Playwright storage state for Slack + Notion.")
-    parser.add_argument("--output", default="browser_storage_state.json", help="Storage state output path")
+    parser.add_argument("--output", default="config/browser_storage_state.json", help="Storage state output path")
     parser.add_argument("--headless", action="store_true", help="Run browser headless (not recommended)")
     parser.add_argument(
         "--wait-seconds",

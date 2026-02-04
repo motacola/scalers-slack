@@ -67,7 +67,7 @@ def _deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, An
 class ScalersSlackEngine:
     def __init__(
         self,
-        config_path: str = "config.json",
+        config_path: str = "config/config.json",
         config: dict[str, Any] | None = None,
         slack_client: SlackClient | None = None,
         notion_client: NotionClient | None = None,
@@ -109,9 +109,7 @@ class ScalersSlackEngine:
             verbose_logging=browser_settings.get("verbose_logging", False),
             keep_open=browser_settings.get("keep_open", False),
             interactive_login=browser_settings.get("interactive_login", True),
-            interactive_login_timeout_ms=_coerce_int(
-                browser_settings.get("interactive_login_timeout_ms"), 120000
-            ),
+            interactive_login_timeout_ms=_coerce_int(browser_settings.get("interactive_login_timeout_ms"), 120000),
             auto_save_storage_state=browser_settings.get("auto_save_storage_state", True),
             auto_recover=browser_settings.get("auto_recover", True),
             auto_recover_refresh=browser_settings.get("auto_recover_refresh", True),
@@ -577,7 +575,7 @@ class ScalersSlackEngine:
                 return
 
             self.notion.update_page_property(page_id, property_name, sync_timestamp)
-            
+
             supports_verification = getattr(self.notion, "supports_verification", True)
             if not supports_verification:
                 self.audit.log(action, "completed", {"page_id": page_id, "value": sync_timestamp, "run_id": run_id})
@@ -755,7 +753,7 @@ class ScalersSlackEngine:
         """
         database_id = os.getenv("NOTION_TICKETS_DATABASE_ID") or self.audit_settings.get("notion_tickets_database_id")
         builds_db_id = os.getenv("NOTION_BUILDS_DATABASE_ID") or self.audit_settings.get("notion_builds_database_id")
-        
+
         database_ids = [db for db in [database_id, builds_db_id] if db]
         if not database_ids:
             return "Error: No Notion Database IDs found in ENV or config.json"
@@ -778,7 +776,6 @@ class ScalersSlackEngine:
         manager = TicketManager(cast(NotionClient, self.notion))
         notion_url = project.get("notion_page_url")
         return manager.update_project_ticket(project_name, summary_text, database_ids, notion_page_id_or_url=notion_url)
-
 
     def collect_activity(
         self,
@@ -836,7 +833,7 @@ class ScalersSlackEngine:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scalers Slack Automation")
-    parser.add_argument("--config", default="config.json", help="Path to config.json")
+    parser.add_argument("--config", default="config/config.json", help="Path to config.json")
     parser.add_argument("--project", help="Project name from config.json")
     parser.add_argument("--all", action="store_true", help="Sync all projects in config.json")
     parser.add_argument("--since", help="ISO8601 timestamp (e.g. 2024-01-01T00:00:00Z)")

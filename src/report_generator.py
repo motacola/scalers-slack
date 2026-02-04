@@ -43,21 +43,23 @@ class ReportGenerator:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for task in self.tasks:
-                writer.writerow({
-                    "Status": task.status,
-                    "Priority": task.priority,
-                    "Due Date": task.due_date,
-                    "Task": task.text,
-                    "Channel": task.channel,
-                    "Owner": task.owner,
-                    "Client": task.client,
-                    "Task Type": task.task_type,
-                    "Urgency Score": task.urgency_score,
-                    "Is Actionable": task.is_actionable,
-                    "Tags": ", ".join(task.tags),
-                    "Link": task.permalink,
-                    "Source": task.source,
-                })
+                writer.writerow(
+                    {
+                        "Status": task.status,
+                        "Priority": task.priority,
+                        "Due Date": task.due_date,
+                        "Task": task.text,
+                        "Channel": task.channel,
+                        "Owner": task.owner,
+                        "Client": task.client,
+                        "Task Type": task.task_type,
+                        "Urgency Score": task.urgency_score,
+                        "Is Actionable": task.is_actionable,
+                        "Tags": ", ".join(task.tags),
+                        "Link": task.permalink,
+                        "Source": task.source,
+                    }
+                )
 
         print(f"Wrote {len(self.tasks)} rows to {output_path}")
 
@@ -235,12 +237,21 @@ class ReportGenerator:
             f"<h1>Slack digest (last 24 hours) • {self.date}</h1>",
             "<div class='summary'>",
             "<p class='summary-lede'>Here’s the useful stuff from your Slack DMs. Nothing is posted automatically.</p>",
-            f"<div class='summary-grid'>",
-            f"<div class='summary-card'><div class='summary-num'>{actionable_count}</div><div class='summary-label'>Things to do</div></div>",
-            f"<div class='summary-card'><div class='summary-num'>{fyi_count}</div><div class='summary-label'>FYI / context</div></div>",
+            "<div class='summary-grid'>",
+            (
+                f"<div class='summary-card'><div class='summary-num'>{actionable_count}</div>"
+                f"<div class='summary-label'>Things to do</div></div>"
+            ),
+            (
+                f"<div class='summary-card'><div class='summary-num'>{fyi_count}</div>"
+                f"<div class='summary-label'>FYI / context</div></div>"
+            ),
             "</div>",
             "<div class='controls'>",
-            "<input id='filter' class='filter' type='search' placeholder='Filter… (type a name or keyword)' oninput='filterTasks()' />",
+            (
+                "<input id='filter' class='filter' type='search' "
+                "placeholder='Filter… (type a name or keyword)' oninput='filterTasks()' />"
+            ),
             "<button class='btn' onclick='toggleAll(true)'>Expand all</button>",
             "<button class='btn' onclick='toggleAll(false)'>Collapse all</button>",
             "</div>",
@@ -254,23 +265,25 @@ class ReportGenerator:
         else:
             html_parts.extend(self._generate_flat_html())
 
-        html_parts.extend([
-            "<script>",
-            "function filterTasks(){",
-            "  const q=(document.getElementById('filter').value||'').toLowerCase();",
-            "  const items=document.querySelectorAll('[data-task]');",
-            "  items.forEach(el=>{",
-            "    const txt=(el.getAttribute('data-task')||'').toLowerCase();",
-            "    el.style.display = (!q || txt.includes(q)) ? '' : 'none';",
-            "  });",
-            "}",
-            "function toggleAll(open){",
-            "  document.querySelectorAll('details.owner').forEach(d=>{d.open=open;});",
-            "}",
-            "</script>",
-            "</body>",
-            "</html>",
-        ])
+        html_parts.extend(
+            [
+                "<script>",
+                "function filterTasks(){",
+                "  const q=(document.getElementById('filter').value||'').toLowerCase();",
+                "  const items=document.querySelectorAll('[data-task]');",
+                "  items.forEach(el=>{",
+                "    const txt=(el.getAttribute('data-task')||'').toLowerCase();",
+                "    el.style.display = (!q || txt.includes(q)) ? '' : 'none';",
+                "  });",
+                "}",
+                "function toggleAll(open){",
+                "  document.querySelectorAll('details.owner').forEach(d=>{d.open=open;});",
+                "}",
+                "</script>",
+                "</body>",
+                "</html>",
+            ]
+        )
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(html_parts))

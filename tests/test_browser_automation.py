@@ -36,8 +36,9 @@ def browser_config():
 @pytest.fixture
 def mock_browser_session(browser_config):
     """Fixture for a mock browser session."""
-    with patch("src.browser_automation.sync_playwright") as mock_playwright, patch(
-        "src.browser_automation.os.path.exists", return_value=True
+    with (
+        patch("src.browser_automation.sync_playwright") as mock_playwright,
+        patch("src.browser_automation.os.path.exists", return_value=True),
     ):
         mock_playwright.return_value.start.return_value = MagicMock()
         mock_playwright.return_value.chromium.launch.return_value = MagicMock()
@@ -79,16 +80,17 @@ def test_notion_browser_client_initialization(mock_browser_session, browser_conf
 def test_slack_api_call_success(mock_browser_session, browser_config):
     """Test a successful Slack API call."""
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)
-    
+
     # Mock the request and response
     mock_request = MagicMock()
     mock_response = MagicMock()
     mock_response.status = 200
     mock_response.json.return_value = {"ok": True, "messages": []}
     mock_request.get.return_value = mock_response
-    
-    with patch.object(slack_client, "_get_web_token", return_value="xoxc-test"), patch.object(
-        slack_client.session, "request", return_value=mock_request
+
+    with (
+        patch.object(slack_client, "_get_web_token", return_value="xoxc-test"),
+        patch.object(slack_client.session, "request", return_value=mock_request),
     ):
         result = slack_client._slack_api_call("conversations.history", params={"channel": "C123456"})
         assert result == {"ok": True, "messages": []}
@@ -97,16 +99,17 @@ def test_slack_api_call_success(mock_browser_session, browser_config):
 def test_slack_api_call_failure(mock_browser_session, browser_config):
     """Test a failed Slack API call."""
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)
-    
+
     # Mock the request and response
     mock_request = MagicMock()
     mock_response = MagicMock()
     mock_response.status = 404
     mock_response.json.return_value = {"ok": False, "error": "channel_not_found"}
     mock_request.get.return_value = mock_response
-    
-    with patch.object(slack_client, "_get_web_token", return_value="xoxc-test"), patch.object(
-        slack_client.session, "request", return_value=mock_request
+
+    with (
+        patch.object(slack_client, "_get_web_token", return_value="xoxc-test"),
+        patch.object(slack_client.session, "request", return_value=mock_request),
     ):
         with pytest.raises(RuntimeError) as exc_info:
             slack_client._slack_api_call("conversations.history", params={"channel": "C123456"})
@@ -126,9 +129,11 @@ def test_slack_api_call_retries_on_auth_error(mock_browser_session, browser_conf
     mock_response2.json.return_value = {"ok": True, "messages": []}
     mock_request.get.side_effect = [mock_response1, mock_response2]
 
-    with patch.object(slack_client, "_get_web_token", side_effect=["old", "new", "new"]), patch.object(
-        slack_client.session, "request", return_value=mock_request
-    ), patch.object(slack_client, "_refresh_web_token", wraps=slack_client._refresh_web_token) as refresh_mock:
+    with (
+        patch.object(slack_client, "_get_web_token", side_effect=["old", "new", "new"]),
+        patch.object(slack_client.session, "request", return_value=mock_request),
+        patch.object(slack_client, "_refresh_web_token", wraps=slack_client._refresh_web_token) as refresh_mock,
+    ):
         result = slack_client._slack_api_call("conversations.history", params={"channel": "C123456"})
         assert result == {"ok": True, "messages": []}
         assert refresh_mock.called
@@ -137,7 +142,7 @@ def test_slack_api_call_retries_on_auth_error(mock_browser_session, browser_conf
 def test_notion_append_audit_note(mock_browser_session, browser_config):
     """Test appending an audit note to a Notion page."""
     notion_client = NotionBrowserClient(mock_browser_session, browser_config)
-    
+
     # Mock the page and its actions
     mock_page = MagicMock()
     mock_page.wait_for_timeout = MagicMock()
@@ -147,7 +152,7 @@ def test_notion_append_audit_note(mock_browser_session, browser_config):
     mock_page.locator.return_value.last.click = MagicMock()
     mock_page.keyboard.type = MagicMock()
     mock_page.keyboard.press = MagicMock()
-    
+
     with patch.object(notion_client, "_with_page", return_value=None):
         result = notion_client.append_audit_note("PAGE_ID", "Test audit note")
         assert result == "browser-note"
@@ -156,11 +161,11 @@ def test_notion_append_audit_note(mock_browser_session, browser_config):
 def test_retry_mechanism(mock_browser_session, browser_config):
     """Test the retry mechanism for browser actions."""
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)
-    
+
     # Mock the page and its actions to fail twice and succeed on the third attempt
     mock_page = MagicMock()
     mock_page.evaluate.side_effect = [Exception("Failed"), Exception("Failed"), "token"]
-    
+
     with patch.object(slack_client, "_with_page", return_value="token"):
         token = slack_client._get_web_token()
         assert token == "token"
@@ -169,16 +174,16 @@ def test_retry_mechanism(mock_browser_session, browser_config):
 def test_caching_mechanism(mock_browser_session, browser_config):
     """Test the caching mechanism for frequently accessed data."""
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)
-    
+
     # Mock the page and its actions
     mock_page = MagicMock()
     mock_page.evaluate.return_value = "token"
-    
+
     with patch.object(slack_client, "_with_page", return_value="token"):
         # First call should fetch the token
         token1 = slack_client._get_web_token()
         assert token1 == "token"
-        
+
         # Second call should use the cached token
         token2 = slack_client._get_web_token()
         assert token2 == "token"
@@ -190,7 +195,7 @@ def test_parallel_browser_sessions(mock_browser_session, browser_config):
     # In a real scenario, you would test concurrent operations
     session1 = BrowserSession(browser_config)
     session2 = BrowserSession(browser_config)
-    
+
     assert session1.config is browser_config
     assert session2.config is browser_config
 
@@ -243,9 +248,7 @@ def test_log_event_without_directory():
     config = BrowserAutomationConfig(event_log_path="events.jsonl")
     session = BrowserSession(config)
 
-    with patch("src.browser_automation.os.makedirs") as mock_makedirs, patch(
-        "builtins.open", mock_open()
-    ):
+    with patch("src.browser_automation.os.makedirs") as mock_makedirs, patch("builtins.open", mock_open()):
         session.log_event("test_event", {"ok": True})
         mock_makedirs.assert_not_called()
 

@@ -8,10 +8,9 @@ __pycache__/
 
 # Local secrets / sessions
 .env
-browser_storage_state.json
-chrome_profile/
+config/browser_storage_state.json
 
-# Local caches / artifacts
+# Local caches / artifacts (moved chrome_profile here)
 .cache/
 audit/
 output/

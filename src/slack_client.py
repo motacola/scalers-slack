@@ -262,21 +262,20 @@ class SlackClient:
             params = {"types": types, "limit": 1000}
             if cursor:
                 params["cursor"] = cursor
-            
+
             data = self._request("GET", "conversations.list", params=params)
             channels = data.get("channels", [])
-            
+
             for channel in channels:
                 if channel.get("name") == channel_name:
                     channel_id = channel.get("id")
                     if isinstance(channel_id, str):
                         return channel_id
-            
+
             cursor = data.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
         return None
-
 
     def reset_stats(self) -> None:
         self.stats = {

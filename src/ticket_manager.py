@@ -3,9 +3,8 @@ import re
 from .notion_client import NotionClient
 
 NOTION_ID_RE = re.compile(r"[0-9a-fA-F]{32}")
-NOTION_ID_DASHED_RE = re.compile(
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-)
+NOTION_ID_DASHED_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+
 
 class TicketManager:
     def __init__(self, notion: NotionClient):
@@ -39,12 +38,7 @@ class TicketManager:
             # 1. Search for matching page using a filter on the 'Name' or 'Client' property
             # Some databases use 'Client', some use 'Name'
             for property_name in ["Client", "Name"]:
-                filter_query = {
-                    "property": property_name,
-                    "title": {
-                        "contains": project_name
-                    }
-                }
+                filter_query = {"property": property_name, "title": {"contains": project_name}}
                 try:
                     results = self.notion.query_database(database_id, filter=filter_query)
                     if results:

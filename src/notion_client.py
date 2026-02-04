@@ -140,11 +140,7 @@ class NotionClient:
                 {
                     "object": "block",
                     "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [
-                            {"type": "text", "text": {"content": text}}
-                        ]
-                    },
+                    "paragraph": {"rich_text": [{"type": "text", "text": {"content": text}}]},
                 }
             ]
         }
@@ -158,11 +154,7 @@ class NotionClient:
         return self._request("GET", f"blocks/{block_id}")
 
     def update_page_property(self, page_id: str, property_name: str, date_iso: str) -> None:
-        payload = {
-            "properties": {
-                property_name: {"date": {"start": date_iso}}
-            }
-        }
+        payload = {"properties": {property_name: {"date": {"start": date_iso}}}}
         self._request("PATCH", f"pages/{page_id}", json_body=payload, idempotent=True)
 
     def get_page(self, page_id: str) -> dict:
