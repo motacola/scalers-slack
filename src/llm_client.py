@@ -59,7 +59,7 @@ class OpenAIClient(LLMClient):
             raise ImportError("openai package not installed. Run: pip install openai")
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
-        messages = []
+        messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
@@ -70,7 +70,8 @@ class OpenAIClient(LLMClient):
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
-        return response.choices[0].message.content or ""
+        content = response.choices[0].message.content
+        return str(content) if content else ""
 
     def generate_with_context(
         self, messages: list[dict[str, str]], system_prompt: str | None = None
@@ -84,7 +85,8 @@ class OpenAIClient(LLMClient):
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
-        return response.choices[0].message.content or ""
+        content = response.choices[0].message.content
+        return str(content) if content else ""
 
 
 class AnthropicClient(LLMClient):
@@ -111,7 +113,7 @@ class AnthropicClient(LLMClient):
             system=system_prompt or "",
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text
+        return str(response.content[0].text)
 
     def generate_with_context(
         self, messages: list[dict[str, str]], system_prompt: str | None = None
@@ -123,7 +125,7 @@ class AnthropicClient(LLMClient):
             system=system_prompt or "",
             messages=messages,
         )
-        return response.content[0].text
+        return str(response.content[0].text)
 
 
 class OllamaClient(LLMClient):
@@ -155,7 +157,7 @@ class OllamaClient(LLMClient):
             timeout=self.config.timeout,
         )
         response.raise_for_status()
-        return response.json()["message"]["content"]
+        return str(response.json()["message"]["content"])
 
     def generate_with_context(
         self, messages: list[dict[str, str]], system_prompt: str | None = None
@@ -179,12 +181,14 @@ class OllamaClient(LLMClient):
             timeout=self.config.timeout,
         )
         response.raise_for_status()
-        return response.json()["message"]["content"]
+        return str(response.json()["message"]["content"])
 
 
 def create_llm_client(config: LLMConfig) -> LLMClient:
     """Factory function to create appropriate LLM client."""
-    providers = {
+    from typing import Type
+
+    providers: dict[str, Type[LLMClient]] = {
         "openai": OpenAIClient,
         "anthropic": AnthropicClient,
         "claude": AnthropicClient,  # Alias
