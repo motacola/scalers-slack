@@ -445,10 +445,10 @@ class PureBrowserSession:
         """Handle interactive login."""
         logger.info("Starting interactive login flow")
         # Interactive prompts for CLI users
-        print("\n" + "=" * 60)
-        print("Please log in to Slack in the browser window.")
-        print("The session will be saved for future use.")
-        print("=" * 60 + "\n")
+        logger.info("\n" + "=" * 60)
+        logger.info("Please log in to Slack in the browser window.")
+        logger.info("The session will be saved for future use.")
+        logger.info("=" * 60 + "\n")
 
         # Wait for successful login
         success_selectors = [
@@ -537,12 +537,12 @@ def create_storage_state_interactive(
 
     logger.info("Creating browser storage state interactively")
     # Interactive prompts for CLI users
-    print("\n" + "=" * 60)
-    print("Creating Browser Storage State")
-    print("=" * 60)
-    print("A browser window will open. Please log in to Slack.")
-    print("Your session will be saved for automated use.")
-    print("=" * 60 + "\n")
+    logger.info("\n" + "=" * 60)
+    logger.info("Creating Browser Storage State")
+    logger.info("=" * 60)
+    logger.info("A browser window will open. Please log in to Slack.")
+    logger.info("Your session will be saved for automated use.")
+    logger.info("=" * 60 + "\n")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
@@ -553,7 +553,7 @@ def create_storage_state_interactive(
 
         # Wait for login
         logger.info("Waiting for login (timeout: 5 minutes)")
-        print("Waiting for login (timeout: 5 minutes)...")  # CLI feedback
+        logger.info("Waiting for login (timeout: 5 minutes)...")
         success_selectors = [
             '[data-qa="team-menu"]',
             '[data-qa="channel_sidebar"]',
@@ -579,9 +579,9 @@ def create_storage_state_interactive(
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             context.storage_state(path=output_path)
             logger.info("Storage state saved successfully to: %s", output_path)
-            print(f"\n✓ Storage state saved to: {output_path}")  # CLI feedback
+            logger.info(f"\n✓ Storage state saved to: {output_path}")
         else:
             logger.warning("Login timeout - storage state not saved")
-            print("\n✗ Login timeout - please try again")  # CLI feedback
+            logger.warning("\n✗ Login timeout - please try again")
 
         browser.close()

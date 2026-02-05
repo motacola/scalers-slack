@@ -171,6 +171,7 @@ THREAD_REPLIES = SelectorSet(
     ],
 )
 
+
 # Message actions menu
 MESSAGE_ACTIONS = SelectorSet(
     primary='[data-qa="message_actions_menu"]',
@@ -180,6 +181,52 @@ MESSAGE_ACTIONS = SelectorSet(
     ],
 )
 
+# Notion Selectors
+NOTION_MAIN = SelectorSet(
+    primary="div[role='main']",
+    fallbacks=["#notion-app", ".notion-app-inner"],
+)
+
+NOTION_PAGE_CANVAS = SelectorSet(
+    primary="div[data-qa='page-canvas']",
+    fallbacks=[".notion-page-content", ".notion-scroller"],
+)
+
+NOTION_READY_INDICATORS = SelectorSet(
+    primary="div[role='main']",
+    fallbacks=["div[data-qa='page-canvas']", ".notion-page-content"],
+)
+
+NOTION_CONTENT_EDITABLE = SelectorSet(
+    primary="div[contenteditable='true']",
+    fallbacks=[".notion-selectable[contenteditable='true']", "[placeholder='Untitled']"],
+)
+
+# BugHerd Selectors
+BUGHERD_ADD_TASK = SelectorSet(
+    primary='[data-testid="add-task-button"]',
+    fallbacks=["#add-task-button", 'button:has-text("Add Task")', ".add-task-btn"],
+)
+
+BUGHERD_TASK_TITLE = SelectorSet(
+    primary='textarea[placeholder*="title"]',
+    fallbacks=["textarea.task-title", 'input[name="title"]', ".task-title-input"],
+)
+
+BUGHERD_TASK_DESCRIPTION = SelectorSet(
+    primary='textarea[placeholder*="description"]',
+    fallbacks=["textarea.task-description", ".task-desc-input"],
+)
+
+BUGHERD_SUBMIT = SelectorSet(
+    primary='button:has-text("Create")',
+    fallbacks=['button[type="submit"]', 'button:has-text("Save")', ".submit-btn"],
+)
+
+BUGHERD_READY_INDICATORS = SelectorSet(
+    primary=".task-list",
+    fallbacks=[".project-tasks", "[data-testid='task-list']", ".ant-layout"],
+)
 
 class DOMExtractor:
     """Extract data from Slack DOM using robust selectors."""

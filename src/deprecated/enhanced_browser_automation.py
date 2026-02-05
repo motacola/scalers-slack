@@ -342,9 +342,9 @@ def create_storage_state_interactive(
 
     logger.info("Creating browser storage state interactively")
     # Interactive prompts for CLI users
-    print("Creating browser storage state...")
-    print("A browser window will open. Please log in to Slack manually.")
-    print("The session will be saved after login.")
+    logger.info("Creating browser storage state...")
+    logger.info("A browser window will open. Please log in to Slack manually.")
+    logger.info("The session will be saved after login.")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
@@ -356,22 +356,22 @@ def create_storage_state_interactive(
 
         # Wait for user to log in
         logger.info("Waiting for login (timeout: 5 minutes)")
-        print("Waiting for login (timeout: 5 minutes)...")  # CLI feedback
+        logger.info("Waiting for login (timeout: 5 minutes)...")
         try:
             # Wait for a sign that user is logged in
             page.wait_for_selector('[data-qa="team-menu"]', timeout=300000)
             logger.info("Login detected successfully")
-            print("Login detected!")  # CLI feedback
+            logger.info("Login detected!")
         except Exception:
             logger.warning("Login timeout exceeded")
-            print("Timeout waiting for login. Please try again.")  # CLI feedback
+            logger.warning("Timeout waiting for login. Please try again.")
             browser.close()
             return
 
         # Save storage state
         context.storage_state(path=output_path)
         logger.info("Storage state saved to: %s", output_path)
-        print(f"Storage state saved to {output_path}")  # CLI feedback
+        logger.info(f"Storage state saved to {output_path}")
 
         browser.close()
 

@@ -14,7 +14,7 @@ from src.plugin_system import (
 
 
 # Test plugin implementations
-class TestTaskProcessor(TaskProcessorPlugin):
+class MockTaskProcessor(TaskProcessorPlugin):
     """Test task processor."""
 
     def get_metadata(self) -> PluginMetadata:
@@ -25,7 +25,7 @@ class TestTaskProcessor(TaskProcessorPlugin):
         return task
 
 
-class TestReportFormatter(ReportFormatterPlugin):
+class MockReportFormatter(ReportFormatterPlugin):
     """Test report formatter."""
 
     def get_metadata(self) -> PluginMetadata:
@@ -38,7 +38,7 @@ class TestReportFormatter(ReportFormatterPlugin):
         return "formatted"
 
 
-class TestNotifier(NotificationPlugin):
+class MockNotifier(NotificationPlugin):
     """Test notifier."""
 
     def get_metadata(self) -> PluginMetadata:
@@ -51,7 +51,7 @@ class TestNotifier(NotificationPlugin):
         return True
 
 
-class TestLLMProvider(LLMProviderPlugin):
+class MockLLMProvider(LLMProviderPlugin):
     """Test LLM provider."""
 
     def get_metadata(self) -> PluginMetadata:
@@ -98,7 +98,7 @@ class TestPluginManager:
     def test_register_task_processor(self):
         """Test registering task processor plugin."""
         manager = PluginManager()
-        plugin = TestTaskProcessor()
+        plugin = MockTaskProcessor()
         plugin.initialize()
 
         manager.plugins["test.processor"] = plugin
@@ -110,7 +110,7 @@ class TestPluginManager:
     def test_get_plugin(self):
         """Test getting plugin by ID."""
         manager = PluginManager()
-        plugin = TestTaskProcessor()
+        plugin = MockTaskProcessor()
 
         manager.plugins["test.processor"] = plugin
 
@@ -121,8 +121,8 @@ class TestPluginManager:
         """Test getting plugins by type."""
         manager = PluginManager()
 
-        processor = TestTaskProcessor()
-        formatter = TestReportFormatter()
+        processor = MockTaskProcessor()
+        formatter = MockReportFormatter()
 
         manager.plugin_types["task_processor"].append(processor)
         manager.plugin_types["report_formatter"].append(formatter)
@@ -134,7 +134,7 @@ class TestPluginManager:
     def test_get_report_formatter(self):
         """Test getting report formatter by name."""
         manager = PluginManager()
-        formatter = TestReportFormatter()
+        formatter = MockReportFormatter()
 
         manager.plugin_types["report_formatter"].append(formatter)
 
@@ -144,7 +144,7 @@ class TestPluginManager:
     def test_get_notification_channel(self):
         """Test getting notification channel by name."""
         manager = PluginManager()
-        notifier = TestNotifier()
+        notifier = MockNotifier()
 
         manager.plugin_types["notification"].append(notifier)
 
@@ -154,7 +154,7 @@ class TestPluginManager:
     def test_get_llm_provider(self):
         """Test getting LLM provider by name."""
         manager = PluginManager()
-        provider = TestLLMProvider()
+        provider = MockLLMProvider()
 
         manager.plugin_types["llm_provider"].append(provider)
 
@@ -164,7 +164,7 @@ class TestPluginManager:
     def test_unload_plugin(self):
         """Test unloading a plugin."""
         manager = PluginManager()
-        plugin = TestTaskProcessor()
+        plugin = MockTaskProcessor()
 
         manager.plugins["test.processor"] = plugin
         manager.plugin_types["task_processor"].append(plugin)
@@ -179,7 +179,7 @@ class TestPluginManager:
         """Test getting plugin summary."""
         manager = PluginManager()
 
-        processor = TestTaskProcessor()
+        processor = MockTaskProcessor()
         manager.plugins["test.processor"] = processor
         manager.plugin_types["task_processor"].append(processor)
 
@@ -194,7 +194,7 @@ class TestPluginImplementations:
 
     def test_task_processor(self):
         """Test task processor plugin."""
-        processor = TestTaskProcessor()
+        processor = MockTaskProcessor()
         task = {"id": 1, "text": "Test task"}
 
         processed = processor.process_task(task)
@@ -203,7 +203,7 @@ class TestPluginImplementations:
 
     def test_report_formatter(self):
         """Test report formatter plugin."""
-        formatter = TestReportFormatter()
+        formatter = MockReportFormatter()
 
         result = formatter.format_report({"tasks": []})
 
@@ -212,7 +212,7 @@ class TestPluginImplementations:
 
     def test_notifier(self):
         """Test notification plugin."""
-        notifier = TestNotifier()
+        notifier = MockNotifier()
 
         result = notifier.send_notification("Test message")
 
@@ -221,7 +221,7 @@ class TestPluginImplementations:
 
     def test_llm_provider(self):
         """Test LLM provider plugin."""
-        provider = TestLLMProvider()
+        provider = MockLLMProvider()
 
         result = provider.generate("Test prompt")
 

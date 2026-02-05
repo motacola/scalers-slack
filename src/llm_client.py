@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 
 @dataclass
@@ -65,7 +65,7 @@ class OpenAIClient(LLMClient):
 
         response = self.client.chat.completions.create(
             model=self.config.model,
-            messages=messages,
+            messages=cast(Any, messages),
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
@@ -78,7 +78,7 @@ class OpenAIClient(LLMClient):
 
         response = self.client.chat.completions.create(
             model=self.config.model,
-            messages=messages,
+            messages=cast(Any, messages),
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
         )
@@ -122,7 +122,7 @@ class AnthropicClient(LLMClient):
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
             system=system_prompt or "",
-            messages=messages,
+            messages=cast(Any, messages),
         )
         # Extract text from first content block (safely handle different block types)
         first_block = response.content[0]

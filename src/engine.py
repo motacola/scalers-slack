@@ -2,22 +2,34 @@ import argparse
 import json
 import logging
 import os
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 from .audit_logger import AuditLogger
-from .browser_automation import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
+from .browser import BrowserAutomationConfig, BrowserSession, NotionBrowserClient, SlackBrowserClient
 from .config_loader import get_project, load_config
 from .config_validation import validate_or_raise
 from .logging_utils import configure_logging, log_event
 from .models import Thread
 from .notion_client import NotionClient
+from .project_memory import ProjectMemory
 from .slack_client import SlackClient
 from .summarizer import ActivitySummarizer
 from .thread_extractor import ThreadExtractor
 from .ticket_manager import TicketManager
+
+try:
+    from .browser import SlackNotionCrossReferencer
+except ImportError:
+    SlackNotionCrossReferencer = None  # type: ignore
+
+try:
+    from .integrations import BugHerdBridge, QABridge
+except ImportError:
+    BugHerdBridge = None  # type: ignore
+    QABridge = None  # type: ignore
+
 from .utils import iso_to_unix_ts, make_run_id, utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -76,6 +88,7 @@ class ScalersSlackEngine:
     ):
         self.base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.config = config or load_config(config_path)
+        self.memory = ProjectMemory()
         self.last_run_summary: dict[str, Any] | None = None
         self._channel_cache: dict[str, dict[str, Any]] = {}
 
@@ -196,6 +209,40 @@ class ScalersSlackEngine:
         self.feature_settings = feature_settings
         self.browser_config = browser_config
 
+        # Store hub URL for Notion navigation
+        self.notion_hub_url = self.config.get("settings", {}).get("notion_hub", {}).get("url", "")
+
+        # Initialize cross-referencer if browser mode is active
+        self.cross_referencer = None
+        if (
+            SlackNotionCrossReferencer is not None
+            and self.browser_session
+            and isinstance(self.slack, SlackBrowserClient)
+            and isinstance(self.notion, NotionBrowserClient)
+        ):
+            self.cross_referencer = SlackNotionCrossReferencer(
+                slack_client=self.slack,
+                notion_client=self.notion,
+                config=self.config,
+            )
+
+        # Initialize BugHerd and QA bridges (separate systems, shared interfaces)
+        self.bugherd_bridge = None
+        self.qa_bridge = None
+        if BugHerdBridge is not None:
+            self.bugherd_bridge = BugHerdBridge(config=self.config)
+            # If in browser mode, set up the browser client for BugHerd
+            if self.browser_session:
+                try:
+                    from .browser import BugHerdBrowserClient
+                    bugherd_browser = BugHerdBrowserClient(self.browser_session, browser_config)
+                    self.bugherd_bridge.set_browser_client(bugherd_browser)
+                    logger.info("BugHerd browser client initialized for browser mode")
+                except ImportError:
+                    logger.debug("BugHerdBrowserClient not available")
+        if QABridge is not None:
+            self.qa_bridge = QABridge()
+
     def run_sync(
         self,
         project_name: str,
@@ -310,7 +357,6 @@ class ScalersSlackEngine:
                 slack_stats=slack_stats,
                 json_enabled=self.json_logging,
             )
-
             self.audit.log(
                 action,
                 "threads_collected",
@@ -323,6 +369,17 @@ class ScalersSlackEngine:
                     "slack_stats": slack_stats,
                 },
             )
+            
+            # Memory-based thread filtering
+            initial_count = len(threads)
+            
+            # Filter out threads already processed in the past
+            threads = [t for t in threads if not self.memory.is_thread_processed(project_name, t.thread_ts)]
+            
+            if len(threads) < initial_count:
+                skipped = initial_count - len(threads)
+                logger.info(f"Memory: Skipped {skipped} threads already processed for {project_name}")
+                self.audit.log(action, "memory_skip", {"project": project_name, "skipped_count": skipped})
 
             audit_note_page = project.get("notion_audit_page_id") or self.audit_settings.get("notion_audit_page_id")
             last_synced_page = project.get("notion_last_synced_page_id") or self.audit_settings.get(
@@ -401,10 +458,20 @@ class ScalersSlackEngine:
                 json_enabled=self.json_logging,
             )
             run_summary["status"] = "completed"
+            
+            # Update memory after successful completion
+            self.memory.update_project_sync(
+                project_name, 
+                sync_timestamp, 
+                len(threads),
+                [t.thread_ts for t in threads]
+            )
+            
             return run_summary
         except Exception as exc:
             run_summary["status"] = "failed"
             run_summary["error"] = str(exc)
+            self.memory.mark_failed(project_name, str(exc))
             raise
         finally:
             run_summary["duration_ms"] = int((time.monotonic() - run_started) * 1000)
@@ -750,12 +817,17 @@ class ScalersSlackEngine:
         """
         Fetches activity for a project, generates a summary,
         and updates the corresponding Notion ticket.
+
+        Works with both API-based and browser-based Notion clients.
         """
         database_id = os.getenv("NOTION_TICKETS_DATABASE_ID") or self.audit_settings.get("notion_tickets_database_id")
         builds_db_id = os.getenv("NOTION_BUILDS_DATABASE_ID") or self.audit_settings.get("notion_builds_database_id")
 
         database_ids = [db for db in [database_id, builds_db_id] if db]
-        if not database_ids:
+
+        # Browser mode doesn't require database IDs (uses search instead)
+        is_browser_mode = isinstance(self.notion, NotionBrowserClient)
+        if not database_ids and not is_browser_mode:
             return "Error: No Notion Database IDs found in ENV or config.json"
 
         # 1. Collect activity
@@ -772,10 +844,279 @@ class ScalersSlackEngine:
         summarizer = ActivitySummarizer(self)
         summary_text = summarizer.format_activity(activity_map)
 
-        # 3. Update Notion
-        manager = TicketManager(cast(NotionClient, self.notion))
+        # 3. Update Notion using TicketManager (supports both API and browser modes)
+        manager = TicketManager(self.notion, hub_url=self.notion_hub_url)
         notion_url = project.get("notion_page_url")
-        return manager.update_project_ticket(project_name, summary_text, database_ids, notion_page_id_or_url=notion_url)
+        result = manager.update_project_ticket(
+            project_name, summary_text, database_ids, notion_page_id_or_url=notion_url
+        )
+
+        # 4. If cross-referencer is available and we updated successfully, log stats
+        if self.cross_referencer and "Updated" in result:
+            logger.info(
+                "Cross-reference stats: %s",
+                self.cross_referencer.get_stats(),
+            )
+
+        return result
+
+    def run_cross_reference_sync(
+        self,
+        project_name: str,
+        since: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Sync Slack channel activity to the corresponding Notion ticket
+        with full cross-referencing of threads.
+
+        Only available in browser mode with cross-referencer enabled.
+        """
+        if not self.cross_referencer:
+            return {
+                "status": "error",
+                "error": "Cross-referencer not available (requires browser mode)",
+            }
+
+        project = get_project(self.config, project_name)
+        if not project:
+            return {
+                "status": "error",
+                "error": f"Project '{project_name}' not found in config.json",
+            }
+
+        channel_id = project.get("slack_channel_id") or self.slack_settings.get("default_channel_id")
+        if not channel_id:
+            return {
+                "status": "error",
+                "error": "No Slack channel ID configured",
+            }
+
+        # Collect threads
+        threads = self.collect_activity(project_name, since=since)
+
+        # Get ticket URL from project config or search
+        ticket_url = project.get("notion_page_url")
+
+        # Run cross-reference sync
+        result = self.cross_referencer.sync_channel_activity_to_ticket(
+            channel_id=channel_id,
+            channel_name=project_name,
+            threads=threads,
+            ticket_url=ticket_url,
+        )
+
+        result["status"] = "completed" if result.get("ticket_updated") else "no_update"
+        result["cross_ref_stats"] = self.cross_referencer.get_stats()
+
+        return result
+
+    def find_notion_ticket(self, project_name: str) -> dict | None:
+        """
+        Find a Notion ticket for a project without updating it.
+        Useful for checking if a ticket exists before running sync.
+        """
+        database_id = os.getenv("NOTION_TICKETS_DATABASE_ID") or self.audit_settings.get("notion_tickets_database_id")
+        builds_db_id = os.getenv("NOTION_BUILDS_DATABASE_ID") or self.audit_settings.get("notion_builds_database_id")
+        database_ids = [db for db in [database_id, builds_db_id] if db]
+
+        manager = TicketManager(self.notion, hub_url=self.notion_hub_url)
+        return manager.find_ticket(project_name, database_ids)
+
+    def list_notion_hub_tickets(self, status_filter: str | None = None) -> list[dict]:
+        """
+        List all tickets from the Notion hub.
+        Only available in browser mode.
+        """
+        manager = TicketManager(self.notion, hub_url=self.notion_hub_url)
+        return manager.list_tickets_from_hub(status_filter)
+
+    # ========== BugHerd Integration Methods ==========
+
+    def create_bugherd_ticket_from_slack(
+        self,
+        project_name: str,
+        message: str,
+        thread_url: str | None = None,
+        page_url: str | None = None,
+        priority: str = "normal",
+        tags: list[str] | None = None,
+        assignee: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Create a BugHerd ticket from a Slack message.
+
+        Args:
+            project_name: Project name to map to BugHerd project
+            message: Slack message content
+            thread_url: Optional Slack thread permalink
+            page_url: Optional URL of page with issue
+            priority: Ticket priority (critical, important, normal, minor)
+            tags: Optional list of tags
+            assignee: Optional assignee name
+
+        Returns:
+            Result dict with status and ticket info
+        """
+        if not self.bugherd_bridge or not self.bugherd_bridge.is_available:
+            return {
+                "status": "error",
+                "error": "BugHerd integration not available",
+            }
+
+        return self.bugherd_bridge.create_ticket_from_slack(
+            project_name=project_name,
+            slack_message=message,
+            slack_thread_url=thread_url,
+            page_url=page_url,
+            priority=priority,
+            tags=tags,
+            assignee_name=assignee,
+        )
+
+    def add_bugherd_comment(
+        self,
+        project_name: str,
+        task_id: str,
+        comment: str,
+        slack_user: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Add a comment to an existing BugHerd ticket.
+
+        Args:
+            project_name: Project name
+            task_id: BugHerd task ID
+            comment: Comment text
+            slack_user: Optional Slack username to attribute
+
+        Returns:
+            Result dict with status
+        """
+        if not self.bugherd_bridge or not self.bugherd_bridge.is_available:
+            return {
+                "status": "error",
+                "error": "BugHerd integration not available",
+            }
+
+        return self.bugherd_bridge.add_comment_from_slack(
+            project_name=project_name,
+            task_id=task_id,
+            comment_text=comment,
+            slack_user=slack_user,
+        )
+
+    # ========== QA Integration Methods ==========
+
+    def run_qa_check(
+        self,
+        url: str,
+        google_doc_url: str | None = None,
+        auto_ticket: bool = False,
+        bugherd_project_id: str | None = None,
+        check_links: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Run a QA check on a URL.
+
+        Args:
+            url: URL to check
+            google_doc_url: Optional Google Doc for comparison
+            auto_ticket: Whether to auto-create BugHerd tickets
+            bugherd_project_id: BugHerd project ID for tickets
+            check_links: Whether to check broken links
+
+        Returns:
+            QA check results
+        """
+        if not self.qa_bridge or not self.qa_bridge.is_available:
+            return {
+                "status": "error",
+                "error": "QA Engine not available",
+            }
+
+        return self.qa_bridge.run_qa_check(
+            url=url,
+            google_doc_url=google_doc_url,
+            auto_ticket=auto_ticket,
+            bugherd_project_id=bugherd_project_id,
+            check_links=check_links,
+        )
+
+    def run_project_qa(
+        self,
+        project_id: str,
+        auto_ticket: bool = False,
+        check_links: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Run QA checks on all pages in a project.
+
+        Args:
+            project_id: Project ID from BugHerd config
+            auto_ticket: Whether to auto-create tickets
+            check_links: Whether to check broken links
+
+        Returns:
+            QA results for all pages
+        """
+        if not self.qa_bridge or not self.qa_bridge.is_available:
+            return {
+                "status": "error",
+                "error": "QA Engine not available",
+            }
+
+        return self.qa_bridge.run_project_qa(
+            project_id=project_id,
+            auto_ticket=auto_ticket,
+            check_links=check_links,
+        )
+
+    def compare_with_google_doc(
+        self,
+        url: str,
+        google_doc_url: str,
+    ) -> dict[str, Any]:
+        """
+        Compare live page content with a Google Doc.
+
+        Args:
+            url: Live page URL
+            google_doc_url: Google Doc URL
+
+        Returns:
+            Comparison results with SEO issues and missing metrics
+        """
+        if not self.qa_bridge or not self.qa_bridge.is_available:
+            return {
+                "status": "error",
+                "error": "QA Engine not available",
+            }
+
+        return self.qa_bridge.compare_with_google_doc(url=url, google_doc_url=google_doc_url)
+
+    def get_integration_status(self) -> dict[str, Any]:
+        """
+        Get status of all integrations.
+
+        Returns:
+            Dict with availability status and stats for each integration
+        """
+        return {
+            "bugherd": {
+                "available": bool(self.bugherd_bridge and self.bugherd_bridge.is_available),
+                "stats": self.bugherd_bridge.get_stats() if self.bugherd_bridge else {},
+            },
+            "qa_engine": {
+                "available": bool(self.qa_bridge and self.qa_bridge.is_available),
+                "stats": self.qa_bridge.get_stats() if self.qa_bridge else {},
+                "projects": self.qa_bridge.list_projects() if self.qa_bridge else [],
+            },
+            "cross_referencer": {
+                "available": self.cross_referencer is not None,
+                "stats": self.cross_referencer.get_stats() if self.cross_referencer else {},
+            },
+            "browser_mode": self.browser_enabled,
+        }
 
     def collect_activity(
         self,
@@ -847,7 +1188,15 @@ def main() -> None:
     parser.add_argument("--validate-config", action="store_true", help="Validate config and exit")
     parser.add_argument("--summarize", action="store_true", help="Generate an AI standup report")
     parser.add_argument("--update-tickets", action="store_true", help="Update Notion tickets with project activity")
-    parser.add_argument("--concurrency", type=int, default=1, help="Number of projects to sync in parallel")
+    parser.add_argument(
+        "--concurrency", type=int, default=1, help="Max number of concurrent project syncs"
+    )
+    parser.add_argument(
+        "--dirty", action="store_true", help="Only sync projects that haven't been synced recently"
+    )
+    parser.add_argument(
+        "--dirty-hours", type=int, default=24, help="The 'dirty' threshold in hours (default: 24)"
+    )
     parser.add_argument("--verbose-browser", action="store_true", help="Enable verbose browser logging")
     parser.add_argument(
         "--keep-browser-open",
@@ -880,7 +1229,7 @@ def main() -> None:
         config = load_config(args.config)
         validate_or_raise(config)
         logger.info("Config OK")
-        print("Config OK")  # Keep for CLI user feedback
+        # logger.info("Config OK") already logged above
         return
 
     if not args.project and not args.all and not args.summarize:
@@ -934,7 +1283,7 @@ def main() -> None:
         if args.summarize:
             report_prompt = engine.run_summarize(since=args.since, concurrency=args.concurrency)
             logger.info("Generated summary report")
-            print(report_prompt)  # Output for CLI
+            logger.info("Report Prompt:\n%s", report_prompt)
             return
 
         if args.update_tickets:
@@ -943,11 +1292,11 @@ def main() -> None:
                 for p in projects:
                     res = engine.run_ticket_update(p["name"], since=args.since)
                     logger.info("Updated tickets for project: %s", p["name"])
-                    print(f"[{p['name']}] {res}")  # Output for CLI
+                    logger.info("[%s] %s", p["name"], res)
             elif args.project:
                 result = engine.run_ticket_update(args.project, since=args.since)
                 logger.info("Updated tickets for project: %s", args.project)
-                print(result)  # Output for CLI
+                logger.info("Project result: %s", result)
             else:
                 parser.error("--update-tickets requires --project or --all")
             return
@@ -957,9 +1306,31 @@ def main() -> None:
         else:
             projects_to_run = [args.project] if args.project else []
 
+        if args.dirty:
+            threshold_s = args.dirty_hours * 3600
+            current_time = time.time()
+            filtered = []
+            for p_name in projects_to_run:
+                state = engine.memory.get_project_state(p_name)
+                last_sync = state.get("last_sync")
+                if not last_sync:
+                    filtered.append(p_name)
+                    continue
+                
+                # Convert ISO timestamp to unix
+                try:
+                    last_sync_unix = iso_to_unix_ts(last_sync)
+                    if current_time - last_sync_unix > threshold_s:
+                        filtered.append(p_name)
+                except Exception:
+                    filtered.append(p_name)
+            
+            logger.info(f"Dirty mode: Filtered {len(projects_to_run)} projects down to {len(filtered)}")
+            projects_to_run = filtered
+
         if not projects_to_run:
             logger.warning("No projects to run")
-            print("No projects to run.")  # Output for CLI
+            # logger.warning("No projects to run") already logged above
             return
 
         def sync_one(p_name: str) -> dict[str, Any] | None:
@@ -973,7 +1344,7 @@ def main() -> None:
                 )
             except Exception as exc:
                 logger.error("Error syncing project '%s': %s", p_name, exc, exc_info=True)
-                print(f"Error syncing project '{p_name}': {exc}", file=sys.stderr)  # Output for CLI
+                logger.error("Error syncing project '%s': %s", p_name, exc)
                 return None
 
         def print_summary(summary: dict[str, Any]) -> None:
@@ -992,7 +1363,7 @@ def main() -> None:
             line = f"[{project}] status={status} threads={threads} duration_ms={duration}"
             if report_path:
                 line += f" report={report_path}"
-            print(line)
+            logger.info(line)
 
         if args.concurrency > 1 and len(projects_to_run) > 1:
             with ThreadPoolExecutor(max_workers=args.concurrency) as executor:

@@ -230,11 +230,11 @@ class ErrorReporter:
 
     def print_summary(self) -> None:
         """Print error and warning summary to console."""
-        print("\n" + "=" * 60)
-        print("Error Report Summary")
-        print("=" * 60)
-        print(self.get_summary())
-        print("=" * 60 + "\n")
+        logger.info("\n" + "=" * 60)
+        logger.info("Error Report Summary")
+        logger.info("=" * 60)
+        logger.info(self.get_summary())
+        logger.info("=" * 60 + "\n")
 
     def clear(self) -> None:
         """Clear all errors and warnings."""
@@ -257,12 +257,12 @@ def setup_exception_handler() -> None:
             exc_info=(exc_type, exc_value, exc_traceback),
         )
 
-        print("\n" + "=" * 60, file=sys.stderr)
-        print("❌ FATAL ERROR", file=sys.stderr)
-        print("=" * 60, file=sys.stderr)
-        print(f"Type: {exc_type.__name__}", file=sys.stderr)
-        print(f"Message: {exc_value}", file=sys.stderr)
-        print("=" * 60 + "\n", file=sys.stderr)
+        logger.critical("\n" + "=" * 60)
+        logger.critical("❌ FATAL ERROR")
+        logger.critical("=" * 60)
+        logger.critical(f"Type: {exc_type.__name__}")
+        logger.critical(f"Message: {exc_value}")
+        logger.critical("=" * 60 + "\n")
 
     sys.excepthook = handle_exception
 

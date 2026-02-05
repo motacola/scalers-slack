@@ -116,7 +116,7 @@ class ConfigManager:
             self._config = self._parse_config(data)
             return self._config
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Warning: Failed to load config from {path}: {e}")
+            logger.warning(f"Warning: Failed to load config from {path}: {e}")
             self._config = DailyReportConfig()
             return self._config
 

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from src.browser_automation import (
+from src.browser import (
     BrowserAutomationConfig,
     BrowserSession,
     LoadBalancer,
@@ -37,8 +37,8 @@ def browser_config():
 def mock_browser_session(browser_config):
     """Fixture for a mock browser session."""
     with (
-        patch("src.browser_automation.sync_playwright") as mock_playwright,
-        patch("src.browser_automation.os.path.exists", return_value=True),
+        patch("src.browser.base.sync_playwright") as mock_playwright,
+        patch("src.browser.base.os.path.exists", return_value=True),
     ):
         mock_playwright.return_value.start.return_value = MagicMock()
         mock_playwright.return_value.chromium.launch.return_value = MagicMock()
@@ -236,7 +236,7 @@ def test_load_balancer_round_robin_selection():
 def test_performance_monitor_stop_before_start_logs_warning():
     """Test that stopping before starting does not update metrics."""
     monitor = PerformanceMonitor()
-    with patch("src.browser_automation.logger") as mock_logger:
+    with patch("src.browser.base.logger") as mock_logger:
         monitor.stop_monitoring(success=True, operation_name="op")
         assert mock_logger.warning.called
     assert monitor.get_metrics()["sync_operations"] == 0
@@ -248,7 +248,7 @@ def test_log_event_without_directory():
     config = BrowserAutomationConfig(event_log_path="events.jsonl")
     session = BrowserSession(config)
 
-    with patch("src.browser_automation.os.makedirs") as mock_makedirs, patch("builtins.open", mock_open()):
+    with patch("src.browser.base.os.makedirs") as mock_makedirs, patch("builtins.open", mock_open()):
         session.log_event("test_event", {"ok": True})
         mock_makedirs.assert_not_called()
 

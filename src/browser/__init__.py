@@ -1,9 +1,4 @@
-"""
-DEPRECATED: Use src.browser package instead.
-This module is kept for backward compatibility and redirects to the new modular structure.
-"""
-import logging
-from .browser import (
+from .base import (
     BrowserAutomationConfig,
     BrowserSession,
     LoadBalancer,
@@ -11,14 +6,11 @@ from .browser import (
     RecoveryManager,
     ScalabilityManager,
     sync_playwright,
-    BugHerdBrowserClient,
-    SlackNotionCrossReferencer,
-    NotionBrowserClient,
-    SlackBrowserClient,
 )
-
-logger = logging.getLogger(__name__)
-logger.warning("src.browser_automation is deprecated. Please import from src.browser instead.")
+from .bugherd_client import BugHerdBrowserClient
+from .cross_referencer import SlackNotionCrossReferencer
+from .notion_client import NotionBrowserClient
+from .slack_client import SlackBrowserClient
 
 __all__ = [
     "BrowserAutomationConfig",
