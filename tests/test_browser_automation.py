@@ -158,6 +158,53 @@ def test_notion_append_audit_note(mock_browser_session, browser_config):
         assert result == "browser-note"
 
 
+def test_notion_normalize_property_value(mock_browser_session, browser_config):
+    """Notion property values should normalize ISO datetime inputs to date-only strings."""
+    notion_client = NotionBrowserClient(mock_browser_session, browser_config)
+    assert notion_client._normalize_property_value("2026-02-07T11:23:45.000Z") == "2026-02-07"
+    assert notion_client._normalize_property_value("In Progress") == "In Progress"
+
+
+def test_notion_update_page_property_uses_text_value(mock_browser_session, browser_config):
+    """Property updates should pass non-date text values through the setter path."""
+    notion_client = NotionBrowserClient(mock_browser_session, browser_config)
+    mock_page = MagicMock()
+    mock_label = MagicMock()
+    mock_value_cell = MagicMock()
+
+    with (
+        patch.object(notion_client, "_with_page", side_effect=lambda _url, fn, *_a, **_k: fn(mock_page)),
+        patch.object(notion_client, "_wait_for_main"),
+        patch.object(notion_client, "_find_property_label", return_value=mock_label),
+        patch.object(notion_client, "_find_property_value_cell", return_value=mock_value_cell),
+        patch.object(notion_client, "_set_property_value", return_value=True) as set_value,
+        patch.object(notion_client, "_verify_property_value", return_value=True),
+    ):
+        notion_client.update_page_property("PAGE_ID", "Status", "In Progress")
+
+    set_value.assert_called_once_with(mock_page, mock_value_cell, "In Progress")
+
+
+def test_notion_update_page_property_normalizes_datetime_input(mock_browser_session, browser_config):
+    """Property updates should normalize ISO datetime values before setting."""
+    notion_client = NotionBrowserClient(mock_browser_session, browser_config)
+    mock_page = MagicMock()
+    mock_label = MagicMock()
+    mock_value_cell = MagicMock()
+
+    with (
+        patch.object(notion_client, "_with_page", side_effect=lambda _url, fn, *_a, **_k: fn(mock_page)),
+        patch.object(notion_client, "_wait_for_main"),
+        patch.object(notion_client, "_find_property_label", return_value=mock_label),
+        patch.object(notion_client, "_find_property_value_cell", return_value=mock_value_cell),
+        patch.object(notion_client, "_set_property_value", return_value=True) as set_value,
+        patch.object(notion_client, "_verify_property_value", return_value=True),
+    ):
+        notion_client.update_page_property("PAGE_ID", "Last Synced", "2026-02-07T11:23:45.000Z")
+
+    set_value.assert_called_once_with(mock_page, mock_value_cell, "2026-02-07")
+
+
 def test_retry_mechanism(mock_browser_session, browser_config):
     """Test the retry mechanism for browser actions."""
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)

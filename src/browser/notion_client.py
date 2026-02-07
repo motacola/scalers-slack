@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any, cast
 
@@ -18,6 +19,8 @@ from ..dom_selectors import (
 )
 
 logger = logging.getLogger(__name__)
+DATE_VALUE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ISO_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T")
 
 class NotionBrowserClient(BaseBrowserClient):
     supports_verification = False
@@ -165,6 +168,83 @@ class NotionBrowserClient(BaseBrowserClient):
             page.wait_for_timeout(300)
         return False
 
+    def _normalize_property_value(self, value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            return ""
+        if ISO_DATETIME_RE.match(text):
+            return text.split("T")[0]
+        return text
+
+    def _looks_like_date_value(self, value: str) -> bool:
+        return bool(DATE_VALUE_RE.match(value.strip()))
+
+    def _clear_active_input(self, page) -> None:
+        page.keyboard.press("Control+A")
+        page.keyboard.press("Meta+A")
+        page.keyboard.press("Backspace")
+
+    def _select_property_option(self, page, value: str) -> bool:
+        if not value:
+            return False
+        candidates = [
+            page.get_by_role("option", name=value, exact=True).first,
+            page.get_by_text(value, exact=True).first,
+            page.get_by_text(value, exact=False).first,
+            page.locator("div[role='option']", has_text=value).first,
+            page.locator("div[role='menuitem']", has_text=value).first,
+        ]
+        for locator in candidates:
+            try:
+                if self._locator_visible(locator, timeout=700):
+                    locator.click(timeout=1500)
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _set_property_value(self, page, value_cell, value: str) -> bool:
+        try:
+            value_cell.click(timeout=5000)
+        except Exception:
+            return False
+
+        is_date_input = False
+        try:
+            meta = value_cell.evaluate(
+                """
+                (el) => ({
+                    tag: (el.tagName || '').toLowerCase(),
+                    type: (el.getAttribute('type') || '').toLowerCase(),
+                    role: (el.getAttribute('role') || '').toLowerCase(),
+                    contenteditable: (el.getAttribute('contenteditable') || '').toLowerCase(),
+                })
+                """
+            )
+            if isinstance(meta, dict):
+                is_date_input = str(meta.get("type") or "").lower() == "date"
+        except Exception:
+            is_date_input = False
+
+        try:
+            if value and is_date_input and self._looks_like_date_value(value):
+                try:
+                    value_cell.fill(value)
+                except Exception:
+                    self._clear_active_input(page)
+                    page.keyboard.type(value)
+                page.keyboard.press("Enter")
+                return True
+
+            self._clear_active_input(page)
+            if value:
+                page.keyboard.type(value)
+                self._select_property_option(page, value)
+            page.keyboard.press("Enter")
+            return True
+        except Exception:
+            return False
+
     def _find_property_label(self, page, property_name: str):
         candidates = [
             page.get_by_text(property_name, exact=True).first,
@@ -229,7 +309,7 @@ class NotionBrowserClient(BaseBrowserClient):
 
     def update_page_property(self, page_id: str, property_name: str, date_iso: str) -> None:
         url = self._page_url(page_id)
-        date_value = date_iso.split("T")[0] if date_iso else ""
+        property_value = self._normalize_property_value(date_iso)
 
         def action(page):
             page.wait_for_timeout(1000)
@@ -244,13 +324,10 @@ class NotionBrowserClient(BaseBrowserClient):
                     self._focus_canvas(page)
                     page.wait_for_timeout(500)
                     continue
-                value_cell.click(timeout=5000)
-                page.keyboard.press("Control+A")
-                page.keyboard.press("Meta+A")
-                if date_value:
-                    page.keyboard.type(date_value)
-                page.keyboard.press("Enter")
-                if self._verify_property_value(page, value_cell, date_value):
+                if not self._set_property_value(page, value_cell, property_value):
+                    page.wait_for_timeout(500)
+                    continue
+                if self._verify_property_value(page, value_cell, property_value):
                     return
                 if attempt < 2:
                     self._focus_canvas(page)
