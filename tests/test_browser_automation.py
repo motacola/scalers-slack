@@ -366,6 +366,49 @@ def test_thread_replies_dom_fallback_uses_history_if_thread_empty(mock_browser_s
     history_fetch.assert_called_once_with("C123", limit=200)
 
 
+def test_thread_url_candidates_include_channel_base(mock_browser_session, browser_config):
+    """Thread URL candidates should include a channel URL for click-open fallback."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+    candidates = slack_client._thread_url_candidates("C12345678", "1700000000.000001")
+
+    assert candidates
+    assert candidates[0].endswith("/T123456/C12345678")
+    assert any("thread_ts=1700000000.000001" in candidate for candidate in candidates)
+
+
+def test_fetch_thread_replies_dom_attempts_root_click_open(mock_browser_session, browser_config):
+    """When thread pane is missing, DOM thread fetch should attempt root-message click opening."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+    page = MagicMock()
+
+    with (
+        patch.object(slack_client.session, "new_page", return_value=page),
+        patch.object(slack_client, "_wait_until_ready"),
+        patch.object(
+            slack_client,
+            "_thread_url_candidates",
+            return_value=["https://app.slack.com/client/T123456/C12345678"],
+        ),
+        patch.object(slack_client, "_thread_pane_scope", return_value=None),
+        patch.object(slack_client, "_open_thread_from_root_message", return_value=False) as open_root,
+        patch.object(slack_client, "_collect_messages_from_scope", return_value=0),
+        patch("src.browser.slack_client.DOMExtractor") as extractor_cls,
+    ):
+        extractor = MagicMock()
+        extractor.wait_for_element.return_value = True
+        extractor_cls.return_value = extractor
+
+        messages = slack_client._fetch_thread_replies_dom(
+            "C12345678",
+            "1700000000.000001",
+            limit=5,
+            max_scrolls=1,
+        )
+
+    assert messages == []
+    open_root.assert_called_once_with(page, channel_id="C12345678", thread_ts="1700000000.000001")
+
+
 def test_build_api_like_message_allows_thread_override(mock_browser_session, browser_config):
     """DOM conversion should preserve explicit thread_ts override for thread-pane extraction."""
     slack_client = SlackBrowserClient(mock_browser_session, browser_config)

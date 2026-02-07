@@ -25,6 +25,7 @@ from ..dom_selectors import (
     SEARCH_RESULT,
     THREAD_MESSAGE_CONTAINER,
     THREAD_PANE_CONTAINER,
+    THREAD_REPLIES,
 )
 
 logger = logging.getLogger(__name__)
@@ -167,6 +168,7 @@ class SlackBrowserClient(BaseBrowserClient):
         compact_ts = normalized.replace(".", "")
         channel_url = self._channel_url(channel_id)
         candidates = [
+            channel_url,
             f"{channel_url}?thread_ts={normalized}&cid={channel_id}",
             f"{channel_url}/thread/{channel_id}-{normalized}",
             f"{channel_url}/thread/{channel_id}-{compact_ts}",
@@ -180,6 +182,88 @@ class SlackBrowserClient(BaseBrowserClient):
             seen.add(candidate)
             ordered.append(candidate)
         return ordered
+
+    def _thread_pane_scope(self, page, timeout: int = 1500):
+        return self._find_first_visible_locator(page, THREAD_PANE_CONTAINER.get_all(), timeout=timeout)
+
+    def _find_root_message_for_thread(self, page, extractor: DOMExtractor, thread_ts: str):
+        for selector in MESSAGE_CONTAINER.get_all():
+            try:
+                for message in page.locator(selector).all():
+                    data = extractor.extract_message_data(message, require_text=False)
+                    if not data:
+                        continue
+                    candidate_ts = self._normalize_ts(data.get("ts"))
+                    if not candidate_ts:
+                        candidate_ts = self._normalize_ts(self._parse_ts_from_permalink(str(data.get("permalink") or "")))
+                    if candidate_ts == thread_ts:
+                        return message
+            except Exception:
+                continue
+        return None
+
+    def _click_thread_trigger(self, message) -> bool:
+        trigger_locators: list[Any] = []
+        for selector in THREAD_REPLIES.get_all():
+            trigger_locators.append(message.locator(selector).first)
+        trigger_locators.extend(
+            [
+                message.locator("button[aria-label*='thread' i]").first,
+                message.locator("button[aria-label*='reply' i]").first,
+                message.locator("a[data-ts]").first,
+                message.locator("time[data-ts]").first,
+                message.locator("a[href*='/p']").first,
+            ]
+        )
+
+        for trigger in trigger_locators:
+            try:
+                if trigger.count() <= 0:
+                    continue
+            except Exception:
+                continue
+            try:
+                if trigger.is_visible(timeout=800):
+                    trigger.click(timeout=1800)
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def _open_thread_from_root_message(
+        self,
+        page,
+        channel_id: str,
+        thread_ts: str,
+        max_scrolls: int = 16,
+    ) -> bool:
+        normalized_thread_ts = self._normalize_ts(thread_ts)
+        if not normalized_thread_ts:
+            return False
+        extractor = DOMExtractor(page)
+        extractor.wait_for_element(MESSAGE_LIST_CONTAINER, timeout=10000)
+        container = extractor.scroll_container()
+        if container is None:
+            return False
+
+        for attempt in range(max(1, max_scrolls)):
+            root_message = self._find_root_message_for_thread(page, extractor, normalized_thread_ts)
+            if root_message is not None and self._click_thread_trigger(root_message):
+                page.wait_for_timeout(700)
+                if self._thread_pane_scope(page, timeout=1600) is not None:
+                    return True
+            try:
+                container.evaluate("el => el.scrollBy(0, -Math.max(el.clientHeight * 1.8, 1400))")
+            except Exception:
+                try:
+                    page.mouse.wheel(0, -2200)
+                except Exception:
+                    break
+            page.wait_for_timeout(650)
+            if attempt % 3 == 2 and self._thread_pane_scope(page, timeout=500) is not None:
+                return True
+
+        return self._thread_pane_scope(page, timeout=1000) is not None
 
     def _collect_messages_from_scope(
         self,
@@ -254,7 +338,10 @@ class SlackBrowserClient(BaseBrowserClient):
             try:
                 self._wait_until_ready(page)
                 extractor = DOMExtractor(page)
-                thread_scope = self._find_first_visible_locator(page, THREAD_PANE_CONTAINER.get_all(), timeout=2500)
+                thread_scope = self._thread_pane_scope(page, timeout=2500)
+                if thread_scope is None:
+                    self._open_thread_from_root_message(page, channel_id=channel_id, thread_ts=normalized_thread_ts)
+                    thread_scope = self._thread_pane_scope(page, timeout=2500)
                 if thread_scope is None:
                     extractor.wait_for_element(MESSAGE_LIST_CONTAINER, timeout=8000)
 
