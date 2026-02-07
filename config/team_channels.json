@@ -1,0 +1,233 @@
+{
+  "version": "1.0.0",
+  "description": "Team member to Slack channel mappings for efficient task tracking",
+  "last_updated": "2026-02-06",
+
+  "channel_categories": {
+    "standup": {
+      "description": "Daily standup channel for all team members",
+      "channels": ["standup"]
+    },
+    "pods": {
+      "description": "Team pod channels for coordination",
+      "channels": ["ss-website-pod", "web-crew"]
+    },
+    "tickets": {
+      "description": "Ticket and task notification channels",
+      "channels": ["ss-website-tickets", "notion-task-board-updates"]
+    },
+    "general": {
+      "description": "General coordination channels",
+      "channels": ["service-scalers-website"]
+    }
+  },
+
+  "team_members": {
+    "Italo Germando": {
+      "slack_display_name": "Italo Germando",
+      "slack_user_id": null,
+      "role": "Web Developer",
+      "timezone": "America/Sao_Paulo",
+      "client_channels": [
+        {
+          "channel": "ss-captain-clean-website-edits",
+          "client": "Captain Clean",
+          "priority": "high"
+        },
+        {
+          "channel": "ss-captain-clean-ppc",
+          "client": "Captain Clean",
+          "priority": "medium",
+          "notes": "PPC related, check for website mentions"
+        },
+        {
+          "channel": "ss-eds-pumps-website-management",
+          "client": "EDS Pumps",
+          "priority": "high"
+        },
+        {
+          "channel": "ss-awful-nice-guys-website-management",
+          "client": "Awful Nice Guys",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-aaa-electrical-website-management",
+          "client": "AAA Electrical",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-unified-designs-website-management",
+          "client": "Unified Designs",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-arcadia-outdoors-website-management",
+          "client": "Arcadia Outdoors",
+          "priority": "low"
+        }
+      ],
+      "always_check": ["standup", "ss-website-pod"],
+      "keywords_to_watch": ["@Italo", "Italo Germando", "location pages", "build"]
+    },
+
+    "Francisco Oliveira": {
+      "slack_display_name": "Francisco",
+      "slack_user_id": null,
+      "role": "Web Developer",
+      "timezone": "America/Sao_Paulo",
+      "client_channels": [
+        {
+          "channel": "ss-ark-home-inspections-website-management",
+          "client": "Ark Home Inspections",
+          "priority": "high"
+        },
+        {
+          "channel": "ss-my-calgary-website-management",
+          "client": "My Calgary",
+          "priority": "high"
+        },
+        {
+          "channel": "ss-spence-and-daves-website-management",
+          "client": "Spence and Daves",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-parker-and-co-website-management",
+          "client": "Parker and Co",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-rh-coatings-website-management",
+          "client": "RH Coatings",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-buzz-electrical-website-hosting",
+          "client": "Buzz Electrical",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-buzz-electrical-seo",
+          "client": "Buzz Electrical SEO",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-buzz-electrical-lsa",
+          "client": "Buzz Electrical LSA",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-memphis-ice-careers-website-management",
+          "client": "Memphis Ice Careers",
+          "priority": "low"
+        }
+      ],
+      "always_check": ["standup", "ss-website-pod"],
+      "keywords_to_watch": ["@Francisco", "Francisco Oliveira", "build", "SEO"]
+    },
+
+    "Christopher Belgrave": {
+      "slack_display_name": "Christopher Belgrave",
+      "slack_user_id": null,
+      "role": "Web Developer / Lead",
+      "timezone": "Europe/London",
+      "client_channels": [
+        {
+          "channel": "ss-eds-pumps-website-management",
+          "client": "EDS Pumps",
+          "priority": "high",
+          "notes": "Shared with Italo - content/LP work"
+        },
+        {
+          "channel": "ss-lake-county-mechanical-website-hosting",
+          "client": "Lake County Mechanical",
+          "priority": "high"
+        },
+        {
+          "channel": "ss-trips-website-management",
+          "client": "Trips",
+          "priority": "high"
+        },
+        {
+          "channel": "ss-performance-of-maine-website-management",
+          "client": "Performance of Maine",
+          "priority": "high"
+        },
+        {
+          "channel": "ss-greenhaus-painting-website-management",
+          "client": "Greenhaus Painting",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-clear-choice-painting-website-build",
+          "client": "Clear Choice Painting",
+          "priority": "medium"
+        },
+        {
+          "channel": "ss-the-comfort-company-website-management",
+          "client": "The Comfort Company",
+          "priority": "medium"
+        }
+      ],
+      "always_check": ["standup", "ss-website-pod", "ss-website-tickets"],
+      "keywords_to_watch": ["@Christopher", "Christopher Belgrave", "LP", "content", "edits"]
+    }
+  },
+
+  "shared_channels": {
+    "description": "Channels where multiple team members collaborate",
+    "channels": {
+      "ss-eds-pumps-website-management": ["Italo Germando", "Christopher Belgrave"],
+      "ss-website-pod": ["Italo Germando", "Francisco Oliveira", "Christopher Belgrave"],
+      "standup": ["Italo Germando", "Francisco Oliveira", "Christopher Belgrave"]
+    }
+  },
+
+  "check_order": {
+    "description": "Recommended order to check channels for daily task review",
+    "order": [
+      "standup",
+      "ss-website-tickets",
+      "ss-website-pod",
+      "{client_channels_by_priority}"
+    ]
+  },
+
+  "thread_patterns": {
+    "description": "Patterns to identify important thread updates",
+    "completion_indicators": [
+      "done",
+      "Done!",
+      "complete",
+      "completed",
+      "finished",
+      "all done",
+      "you're all done",
+      "live",
+      "published"
+    ],
+    "blocker_indicators": [
+      "blocked",
+      "waiting on",
+      "need",
+      "waiting for",
+      "can't proceed",
+      "stuck"
+    ],
+    "question_indicators": [
+      "?",
+      "should I",
+      "can you",
+      "is this",
+      "are there"
+    ],
+    "urgent_indicators": [
+      "urgent",
+      "asap",
+      "today",
+      "eod",
+      "end of day",
+      "priority"
+    ]
+  }
+}

@@ -208,6 +208,32 @@ def test_security_measures(mock_browser_session, browser_config):
     assert slack_client.config.slack_workspace_id == "T123456"
 
 
+def test_history_dom_fallback_preserves_pagination_window(mock_browser_session, browser_config):
+    """When API fails, DOM fallback should cover the same pagination window."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    with (
+        patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("not_authed")),
+        patch.object(slack_client, "_fetch_channel_history_dom", return_value=[]) as dom_fetch,
+    ):
+        slack_client.fetch_channel_history_paginated("C123", limit=50, max_pages=3)
+
+    dom_fetch.assert_called_once_with("C123", limit=150)
+
+
+def test_search_dom_fallback_preserves_pagination_window(mock_browser_session, browser_config):
+    """When API search fails, DOM fallback should cover the same pagination window."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    with (
+        patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("token_expired")),
+        patch.object(slack_client, "_search_messages_dom", return_value=[]) as dom_search,
+    ):
+        slack_client.search_messages_paginated("test query", count=25, max_pages=4)
+
+    dom_search.assert_called_once_with("test query", limit=100)
+
+
 def test_dom_snapshot_written(tmp_path):
     """Test that DOM snapshots are written when enabled."""
     config = BrowserAutomationConfig(recordings_dir=str(tmp_path), html_snapshot_on_error=True)

@@ -194,7 +194,12 @@ NOTION_PAGE_CANVAS = SelectorSet(
 
 NOTION_READY_INDICATORS = SelectorSet(
     primary="div[role='main']",
-    fallbacks=["div[data-qa='page-canvas']", ".notion-page-content"],
+    fallbacks=[
+        "div[data-qa='page-canvas']",
+        ".notion-page-content",
+        "#notion-app",
+        ".notion-app-inner",
+    ],
 )
 
 NOTION_CONTENT_EDITABLE = SelectorSet(

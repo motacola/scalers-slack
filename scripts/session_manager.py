@@ -22,10 +22,19 @@ def main():
     parser.add_argument("--notion", action="store_true", help="Check Notion login")
     parser.add_argument("--google", action="store_true", help="Check Google login")
     parser.add_argument("--interactive", action="store_true", help="Open browser for manual login if needed")
+    parser.add_argument(
+        "--refresh-every-hours",
+        type=float,
+        default=0.0,
+        help="Refresh browser storage state every N hours (requires --interactive)",
+    )
     args = parser.parse_args()
 
     config_data = load_config(args.config)
     settings = config_data.get("settings", {}).get("browser_automation", {})
+
+    if args.refresh_every_hours and not args.interactive:
+        logger.warning("--refresh-every-hours requires --interactive; refresh loop will be skipped.")
     
     # Force interactive mode and non-headless if requested
     if args.interactive:
@@ -89,7 +98,34 @@ def main():
         if args.interactive:
             logger.info("Browser is open for manual interaction. Press Ctrl+C when done.")
             try:
+                refresh_interval = max(0.0, args.refresh_every_hours or 0.0) * 3600
+                next_refresh = time.time() + refresh_interval if refresh_interval > 0 else None
                 while True:
+                    if next_refresh and time.time() >= next_refresh:
+                        logger.info("Refreshing browser storage state...")
+                        if args.slack or (not args.slack and not args.notion and not args.google):
+                            try:
+                                slack = SlackBrowserClient(session, browser_config)
+                                page = session.new_page(slack._slack_client_home())
+                                try:
+                                    slack._wait_until_ready(page)
+                                finally:
+                                    page.close()
+                            except Exception as exc:
+                                logger.warning(f"Slack refresh failed: {exc}")
+                        if args.notion or (not args.slack and not args.notion and not args.google):
+                            try:
+                                notion = NotionBrowserClient(session, browser_config)
+                                page = session.new_page(browser_config.notion_base_url)
+                                try:
+                                    notion._wait_until_ready(page)
+                                finally:
+                                    page.close()
+                            except Exception as exc:
+                                logger.warning(f"Notion refresh failed: {exc}")
+                        session.save_storage_state()
+                        logger.info("Storage state updated.")
+                        next_refresh = time.time() + refresh_interval
                     time.sleep(1)
             except KeyboardInterrupt:
                 logger.info("Closing...")

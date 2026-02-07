@@ -64,6 +64,7 @@
       "sqlite_path": "audit/audit.db",
       "jsonl_path": "audit/audit.jsonl",
       "notion_audit_page_id": "env:NOTION_AUDIT_PAGE_ID",
+      "notion_audit_page_url": "env:NOTION_AUDIT_PAGE_URL",
       "notion_last_synced_page_id": "env:NOTION_LAST_SYNCED_PAGE_ID",
       "notion_tickets_database_id": "28e1c9f5b34f8032b704d33fa9cb9e6c",
       "notion_builds_database_id": "28e1c9f5b34f80128b7bf4dc029722f6",
