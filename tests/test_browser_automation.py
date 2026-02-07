@@ -218,7 +218,7 @@ def test_history_dom_fallback_preserves_pagination_window(mock_browser_session, 
     ):
         slack_client.fetch_channel_history_paginated("C123", limit=50, max_pages=3)
 
-    dom_fetch.assert_called_once_with("C123", limit=150)
+    dom_fetch.assert_called_once_with("C123", latest=None, oldest=None, limit=150)
 
 
 def test_search_dom_fallback_preserves_pagination_window(mock_browser_session, browser_config):
@@ -232,6 +232,90 @@ def test_search_dom_fallback_preserves_pagination_window(mock_browser_session, b
         slack_client.search_messages_paginated("test query", count=25, max_pages=4)
 
     dom_search.assert_called_once_with("test query", limit=100)
+
+
+def test_history_dom_fallback_carries_time_window(mock_browser_session, browser_config):
+    """DOM history fallback should preserve oldest/latest filters."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    with (
+        patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("not_authed")),
+        patch.object(slack_client, "_fetch_channel_history_dom", return_value=[]) as dom_fetch,
+    ):
+        slack_client.fetch_channel_history_paginated(
+            "C123",
+            oldest="1700000000.000000",
+            latest="1800000000.000000",
+            limit=10,
+            max_pages=2,
+        )
+
+    dom_fetch.assert_called_once_with(
+        "C123",
+        latest="1800000000.000000",
+        oldest="1700000000.000000",
+        limit=20,
+    )
+
+
+def test_dom_search_match_includes_channel_structure(mock_browser_session, browser_config):
+    """DOM search conversion should return API-compatible match structure."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    result = slack_client._build_api_like_search_match(
+        {
+            "text": "hello world",
+            "permalink": "https://example.slack.com/archives/C12345678/p1700000000000000",
+            "ts": "1700000000.000000",
+            "channel_id": "C12345678",
+        }
+    )
+    assert result is not None
+    assert result["channel"]["id"] == "C12345678"
+    assert result["thread_ts"] == "1700000000.000000"
+
+
+def test_get_channel_info_falls_back_to_dom(mock_browser_session, browser_config):
+    """Channel info should use DOM fallback when API path is unavailable."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    with (
+        patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("not_authed")),
+        patch.object(
+            slack_client,
+            "_get_channel_info_dom",
+            return_value={"id": "C123", "name": "general", "topic": {"value": ""}},
+        ) as dom_info,
+    ):
+        info = slack_client.get_channel_info("C123")
+
+    assert info["id"] == "C123"
+    dom_info.assert_called_once_with("C123")
+
+
+def test_get_user_info_falls_back_to_minimal_data(mock_browser_session, browser_config):
+    """User info should return minimal safe structure when API is unavailable."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    with patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("token_expired")):
+        user = slack_client.get_user_info("U12345678")
+
+    assert user["id"] == "U12345678"
+    assert user["real_name"] == "U12345678"
+
+
+def test_auth_test_falls_back_to_dom(mock_browser_session, browser_config):
+    """auth_test should still pass using DOM fallback when API auth fails."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    with (
+        patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("not_authed")),
+        patch.object(slack_client, "_auth_test_dom", return_value={"ok": True, "team_id": "T123456"}) as dom_auth,
+    ):
+        result = slack_client.auth_test()
+
+    assert result["ok"] is True
+    dom_auth.assert_called_once()
 
 
 def test_dom_snapshot_written(tmp_path):

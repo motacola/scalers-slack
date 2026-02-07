@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
+from datetime import datetime
 from typing import Any, cast
 from urllib.parse import urlencode, urljoin
 
@@ -13,7 +15,15 @@ from .base import (
     BrowserSession,
     SessionExpiredError,
 )
-from ..dom_selectors import DOMExtractor, MESSAGE_CONTAINER, MESSAGE_LIST_CONTAINER, SEARCH_RESULT
+from ..dom_selectors import (
+    CHANNEL_HEADER_NAME,
+    CHANNEL_SIDEBAR,
+    CHANNEL_TOPIC,
+    DOMExtractor,
+    MESSAGE_CONTAINER,
+    MESSAGE_LIST_CONTAINER,
+    SEARCH_RESULT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +44,116 @@ class SlackBrowserClient(BaseBrowserClient):
     def _search_url(self, query: str) -> str:
         query_string = urlencode({"query": query})
         return f"{self._slack_client_home()}/search?{query_string}"
+
+    def _parse_channel_id_from_text(self, value: str) -> str | None:
+        match = re.search(r"/client/[^/]+/([CGD][A-Z0-9]{8,})", value)
+        if match:
+            return match.group(1)
+        match = re.search(r"/archives/([CGD][A-Z0-9]{8,})", value)
+        if match:
+            return match.group(1)
+        return None
+
+    def _parse_workspace_id_from_text(self, value: str) -> str | None:
+        match = re.search(r"/client/(T[A-Z0-9]{8,})", value)
+        if match:
+            return match.group(1)
+        return None
+
+    def _parse_ts_from_permalink(self, permalink: str) -> str | None:
+        match = re.search(r"/p(\d{10,})", permalink)
+        if not match:
+            return None
+        raw = match.group(1)
+        if len(raw) <= 6:
+            return None
+        return f"{raw[:-6]}.{raw[-6:]}"
+
+    def _normalize_ts(self, ts: Any) -> str:
+        if ts is None:
+            return ""
+        if isinstance(ts, (int, float)):
+            return f"{float(ts):.6f}"
+        text = str(ts).strip()
+        if not text:
+            return ""
+        if re.fullmatch(r"\d+(\.\d+)?", text):
+            if "." in text:
+                whole, frac = text.split(".", 1)
+                return f"{whole}.{frac[:6].ljust(6, '0')}"
+            return f"{text}.000000"
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            return f"{parsed.timestamp():.6f}"
+        except Exception:
+            return ""
+
+    def _ts_to_float(self, ts: Any) -> float | None:
+        normalized = self._normalize_ts(ts)
+        if not normalized:
+            return None
+        try:
+            return float(normalized)
+        except Exception:
+            return None
+
+    def _passes_time_window(self, ts: Any, oldest: str | None = None, latest: str | None = None) -> bool:
+        ts_value = self._ts_to_float(ts)
+        if ts_value is None:
+            return True
+        oldest_value = self._ts_to_float(oldest) if oldest else None
+        latest_value = self._ts_to_float(latest) if latest else None
+        if oldest_value is not None and ts_value < oldest_value:
+            return False
+        if latest_value is not None and ts_value > latest_value:
+            return False
+        return True
+
+    def _build_api_like_message(
+        self,
+        dom_message: dict[str, Any],
+        channel_id: str | None = None,
+        page_url: str | None = None,
+    ) -> dict[str, Any] | None:
+        text = str(dom_message.get("text") or "").strip()
+        permalink = str(dom_message.get("permalink") or "").strip()
+        parsed_channel = (
+            self._parse_channel_id_from_text(permalink)
+            or self._parse_channel_id_from_text(page_url or "")
+            or channel_id
+        )
+        ts = self._normalize_ts(dom_message.get("ts"))
+        if not ts and permalink:
+            ts = self._normalize_ts(self._parse_ts_from_permalink(permalink))
+        if not text and not ts and not permalink:
+            return None
+        user_name = str(dom_message.get("user") or "").strip()
+        user_id = str(dom_message.get("user_id") or "").strip()
+        user = user_id or user_name or "unknown"
+        result: dict[str, Any] = {
+            "type": "message",
+            "text": text,
+            "user": user,
+            "ts": ts or "",
+            "thread_ts": ts or "",
+            "permalink": permalink,
+            "channel_id": parsed_channel,
+            "channel": {"id": parsed_channel} if parsed_channel else {},
+        }
+        if user_name:
+            result["user_profile"] = {"real_name": user_name, "display_name": user_name}
+            result["username"] = user_name
+        return result
+
+    def _build_api_like_search_match(self, dom_result: dict[str, Any]) -> dict[str, Any] | None:
+        channel_id = str(dom_result.get("channel_id") or "").strip() or None
+        message = self._build_api_like_message(dom_result, channel_id=channel_id)
+        if not message:
+            return None
+        return message
+
+    def _sort_messages_desc(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(messages, key=lambda item: self._ts_to_float(item.get("ts")) or 0.0, reverse=True)
 
     def _has_web_token(self, page) -> bool:
         try:
@@ -81,12 +201,11 @@ class SlackBrowserClient(BaseBrowserClient):
             
             # Check for Slack specific elements
             if page.query_selector("[data-qa='channel_sidebar_name'], .p-client_container, .c-message_list"):
-                if self._has_web_token(page):
-                    if self.config.auto_save_storage_state:
-                        self.session.save_storage_state()
-                    return
+                if self._has_web_token(page) and self.config.auto_save_storage_state:
+                    self.session.save_storage_state()
+                return
             page.wait_for_timeout(1000)
-        raise RuntimeError("Timed out waiting for Slack readiness (token not detected)")
+        raise RuntimeError("Timed out waiting for Slack readiness")
 
     def _token_diagnostics(self) -> dict[str, Any]:
         try:
@@ -144,13 +263,17 @@ class SlackBrowserClient(BaseBrowserClient):
             or "auth error" in message
             or "not_authed" in message
             or "token_expired" in message
+            or "slack api error (browser)" in message
+            or "rate limit exceeded" in message
         )
 
     def _fetch_channel_history_dom(
         self,
         channel_id: str,
+        latest: str | None = None,
+        oldest: str | None = None,
         limit: int = 200,
-        max_scrolls: int = 5,
+        max_scrolls: int = 6,
     ) -> list[dict[str, Any]]:
         url = self._channel_url(channel_id)
         page = self.session.new_page(url)
@@ -161,34 +284,59 @@ class SlackBrowserClient(BaseBrowserClient):
             if not extractor.wait_for_element(MESSAGE_LIST_CONTAINER, timeout=20000):
                 raise RuntimeError("Slack DOM not ready for message extraction")
 
-            def collect() -> None:
+            effective_scrolls = max(max_scrolls, min(60, max(6, limit // 40)))
+
+            def collect() -> int:
+                added = 0
                 for selector in MESSAGE_CONTAINER.get_all():
                     try:
                         for element in page.locator(selector).all():
                             data = extractor.extract_message_data(element)
                             if not data:
                                 continue
-                            key = data.get("ts") or f"{data.get('user')}::{data.get('text')}"
+                            api_message = self._build_api_like_message(data, channel_id=channel_id, page_url=page.url)
+                            if not api_message:
+                                continue
+                            if not self._passes_time_window(api_message.get("ts"), oldest=oldest, latest=latest):
+                                continue
+                            key = api_message.get("ts") or f"{api_message.get('user')}::{api_message.get('text')}"
                             if key in seen:
                                 continue
                             seen.add(key)
-                            messages.append(data)
+                            messages.append(api_message)
+                            added += 1
                     except Exception:
                         continue
+                return added
 
             collect()
             container = extractor.scroll_container()
             scrolls = 0
-            while len(messages) < limit and container is not None and scrolls < max_scrolls:
+            stagnant_rounds = 0
+            while len(messages) < limit and container is not None and scrolls < effective_scrolls and stagnant_rounds < 3:
+                before_count = len(messages)
+                before_top = None
                 try:
+                    before_top = container.evaluate("el => el.scrollTop")
                     container.evaluate("el => el.scrollBy(0, -el.scrollHeight)")
                 except Exception:
                     break
                 page.wait_for_timeout(1000)
-                collect()
+                added = collect()
                 scrolls += 1
+                after_top = None
+                try:
+                    after_top = container.evaluate("el => el.scrollTop")
+                except Exception:
+                    after_top = None
+                if added <= 0 and len(messages) == before_count and after_top == before_top:
+                    stagnant_rounds += 1
+                else:
+                    stagnant_rounds = 0
 
-            return messages[:limit]
+            sorted_messages = self._sort_messages_desc(messages)
+            self._set_pagination_stats("history_dom", max(1, scrolls + 1), len(sorted_messages))
+            return sorted_messages[:limit]
         finally:
             try:
                 page.close()
@@ -219,12 +367,19 @@ class SlackBrowserClient(BaseBrowserClient):
         except Exception:
             pass
 
+        if not ts and permalink:
+            ts = self._parse_ts_from_permalink(permalink) or ""
+
+        channel_id = self._parse_channel_id_from_text(permalink) or self._parse_channel_id_from_text(page.url or "")
+
         if not text and not permalink:
             return None
         return {
             "text": text,
             "permalink": permalink,
             "ts": ts,
+            "thread_ts": ts,
+            "channel_id": channel_id,
         }
 
     def _search_messages_dom(self, query: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -236,25 +391,53 @@ class SlackBrowserClient(BaseBrowserClient):
             if not DOMExtractor(page).wait_for_element(SEARCH_RESULT, timeout=20000):
                 raise RuntimeError("Slack search results not ready")
 
-            for selector in SEARCH_RESULT.get_all():
+            def collect() -> int:
+                added = 0
+                for selector in SEARCH_RESULT.get_all():
+                    try:
+                        for element in page.locator(selector).all():
+                            data = self._extract_search_result_data(element, page)
+                            if not data:
+                                continue
+                            match = self._build_api_like_search_match(data)
+                            if not match:
+                                continue
+                            key = match.get("ts") or match.get("permalink") or match.get("text")
+                            if not key or key in seen:
+                                continue
+                            seen.add(key)
+                            results.append(match)
+                            added += 1
+                            if len(results) >= limit:
+                                return added
+                    except Exception:
+                        continue
+                return added
+
+            collect()
+            scrolls = 0
+            stagnant_rounds = 0
+            max_scrolls = max(6, min(50, max(6, limit // 20)))
+            while len(results) < limit and scrolls < max_scrolls and stagnant_rounds < 3:
+                before_count = len(results)
                 try:
-                    for element in page.locator(selector).all():
-                        data = self._extract_search_result_data(element, page)
-                        if not data:
-                            continue
-                        key = data.get("ts") or data.get("permalink") or data.get("text")
-                        if not key or key in seen:
-                            continue
-                        seen.add(key)
-                        results.append(data)
-                        if len(results) >= limit:
-                            break
-                    if len(results) >= limit:
-                        break
+                    page.mouse.wheel(0, 2200)
                 except Exception:
-                    continue
-            self._set_pagination_stats("search_dom", 1, len(results))
-            return results
+                    try:
+                        page.evaluate("window.scrollBy(0, Math.max(1200, Math.floor(window.innerHeight * 1.8)))")
+                    except Exception:
+                        break
+                page.wait_for_timeout(900)
+                added = collect()
+                scrolls += 1
+                if added <= 0 and len(results) == before_count:
+                    stagnant_rounds += 1
+                else:
+                    stagnant_rounds = 0
+
+            results = self._sort_messages_desc(results)
+            self._set_pagination_stats("search_dom", max(1, scrolls + 1), len(results))
+            return results[:limit]
         finally:
             try:
                 page.close()
@@ -397,11 +580,12 @@ class SlackBrowserClient(BaseBrowserClient):
             return None
 
         def action(page):
-            token = _extract_token_from_storage_state()
-            if token:
-                return token
-            try:
-                return page.evaluate(
+            for _ in range(4):
+                token = _extract_token_from_storage_state()
+                if token:
+                    return token
+                try:
+                    token = page.evaluate(
                     """
                     (workspaceId) => {
                         const keys = ["localConfig_v2", "localConfig"];
@@ -428,8 +612,12 @@ class SlackBrowserClient(BaseBrowserClient):
                     """,
                     workspace_id or None,
                 )
-            except Exception:
-                return None
+                    if token:
+                        return token
+                except Exception:
+                    pass
+                page.wait_for_timeout(500)
+            return None
 
         token = self._with_page(self._slack_client_home(), action)
         if isinstance(token, str) and token:
@@ -520,7 +708,7 @@ class SlackBrowserClient(BaseBrowserClient):
             if self._should_fallback_to_dom(exc):
                 logger.warning("Slack API unavailable; falling back to DOM extraction.")
                 dom_limit = max(1, limit) * max(1, max_pages)
-                return self._fetch_channel_history_dom(channel_id, limit=dom_limit)
+                return self._fetch_channel_history_dom(channel_id, latest=latest, oldest=oldest, limit=dom_limit)
             raise
 
     def search_messages_paginated(self, query: str, count: int = 100, max_pages: int = 5) -> list[dict]:
@@ -557,22 +745,29 @@ class SlackBrowserClient(BaseBrowserClient):
         conversations: list[dict[str, Any]] = []
         cursor: str | None = None
         page = 0
-        while True:
-            params: dict[str, Any] = {
-                "types": types,
-                "limit": limit,
-                "exclude_archived": 1 if exclude_archived else 0,
-            }
-            if cursor:
-                params["cursor"] = cursor
-            data = self._slack_api_call("conversations.list", params=params)
-            conversations.extend(cast(list[dict[str, Any]], data.get("channels", [])))
-            cursor = cast(dict, data.get("response_metadata", {}) or {}).get("next_cursor")
-            page += 1
-            if not cursor or page >= max_pages:
-                break
-        self._set_pagination_stats("conversations.list", page, len(conversations))
-        return conversations
+        try:
+            while True:
+                params: dict[str, Any] = {
+                    "types": types,
+                    "limit": limit,
+                    "exclude_archived": 1 if exclude_archived else 0,
+                }
+                if cursor:
+                    params["cursor"] = cursor
+                data = self._slack_api_call("conversations.list", params=params)
+                conversations.extend(cast(list[dict[str, Any]], data.get("channels", [])))
+                cursor = cast(dict, data.get("response_metadata", {}) or {}).get("next_cursor")
+                page += 1
+                if not cursor or page >= max_pages:
+                    break
+            self._set_pagination_stats("conversations.list", page, len(conversations))
+            return conversations
+        except Exception as exc:
+            if self._should_fallback_to_dom(exc):
+                logger.warning("Slack API conversations.list unavailable; falling back to DOM sidebar parsing.")
+                dom_limit = max(1, limit) * max(1, max_pages)
+                return self._list_conversations_dom(limit=dom_limit)
+            raise
 
     def fetch_thread_replies_paginated(
         self,
@@ -584,17 +779,30 @@ class SlackBrowserClient(BaseBrowserClient):
         messages: list[dict[str, Any]] = []
         cursor: str | None = None
         page = 0
-        while True:
-            params: dict[str, Any] = {"channel": channel_id, "ts": thread_ts, "limit": limit}
-            if cursor:
-                params["cursor"] = cursor
-            data = self._slack_api_call("conversations.replies", params=params)
-            messages.extend(cast(list[dict[str, Any]], data.get("messages", [])))
-            cursor = cast(dict, data.get("response_metadata", {}) or {}).get("next_cursor")
-            page += 1
-            if not cursor or page >= max_pages:
-                break
-        return messages
+        try:
+            while True:
+                params: dict[str, Any] = {"channel": channel_id, "ts": thread_ts, "limit": limit}
+                if cursor:
+                    params["cursor"] = cursor
+                data = self._slack_api_call("conversations.replies", params=params)
+                messages.extend(cast(list[dict[str, Any]], data.get("messages", [])))
+                cursor = cast(dict, data.get("response_metadata", {}) or {}).get("next_cursor")
+                page += 1
+                if not cursor or page >= max_pages:
+                    break
+            return messages
+        except Exception as exc:
+            if self._should_fallback_to_dom(exc):
+                logger.warning("Slack API thread replies unavailable; falling back to DOM history approximation.")
+                dom_limit = max(1, limit) * max(1, max_pages)
+                history = self._fetch_channel_history_dom(channel_id, limit=max(200, dom_limit))
+                replies = [
+                    message
+                    for message in history
+                    if message.get("thread_ts") == thread_ts or message.get("ts") == thread_ts
+                ]
+                return replies[:dom_limit]
+            raise
 
     def get_message_permalink(self, channel_id: str, message_ts: str) -> str | None:
         try:
@@ -607,15 +815,133 @@ class SlackBrowserClient(BaseBrowserClient):
         self._slack_api_call("conversations.setTopic", method="POST", body={"channel": channel_id, "topic": topic})
 
     def get_channel_info(self, channel_id: str) -> dict[str, Any]:
-        data = self._slack_api_call("conversations.info", params={"channel": channel_id})
-        return cast(dict[str, Any], data.get("channel", {}))
+        try:
+            data = self._slack_api_call("conversations.info", params={"channel": channel_id})
+            return cast(dict[str, Any], data.get("channel", {}))
+        except Exception as exc:
+            if self._should_fallback_to_dom(exc):
+                logger.warning("Slack API channel info unavailable; falling back to DOM channel header parsing.")
+                return self._get_channel_info_dom(channel_id)
+            raise
 
     def get_user_info(self, user_id: str) -> dict[str, Any]:
-        data = self._slack_api_call("users.info", params={"user": user_id})
-        return cast(dict[str, Any], data.get("user", {}))
+        try:
+            data = self._slack_api_call("users.info", params={"user": user_id})
+            return cast(dict[str, Any], data.get("user", {}))
+        except Exception as exc:
+            if self._should_fallback_to_dom(exc):
+                logger.warning("Slack API user info unavailable; returning minimal DOM-safe user info.")
+                return {
+                    "id": user_id,
+                    "name": user_id,
+                    "real_name": user_id,
+                    "profile": {"real_name": user_id, "display_name": user_id},
+                }
+            raise
 
     def auth_test(self) -> dict[str, Any]:
-        return self._slack_api_call("auth.test")
+        try:
+            return self._slack_api_call("auth.test")
+        except Exception as exc:
+            if self._should_fallback_to_dom(exc):
+                logger.warning("Slack API auth.test unavailable; using DOM auth check fallback.")
+                return self._auth_test_dom()
+            raise
+
+    def _get_channel_info_dom(self, channel_id: str) -> dict[str, Any]:
+        page = self.session.new_page(self._channel_url(channel_id))
+        try:
+            self._wait_until_ready(page)
+            name = ""
+            topic = ""
+            for selector in CHANNEL_HEADER_NAME.get_all():
+                try:
+                    locator = page.locator(selector).first
+                    if locator.count() > 0 and locator.is_visible(timeout=1000):
+                        name = (locator.inner_text() or "").strip()
+                        if name:
+                            break
+                except Exception:
+                    continue
+            for selector in CHANNEL_TOPIC.get_all():
+                try:
+                    locator = page.locator(selector).first
+                    if locator.count() > 0 and locator.is_visible(timeout=1000):
+                        topic = (locator.inner_text() or "").strip()
+                        if topic:
+                            break
+                except Exception:
+                    continue
+            if not name:
+                name = channel_id
+            return {
+                "id": channel_id,
+                "name": name,
+                "name_normalized": name.lower().replace(" ", "-"),
+                "topic": {"value": topic},
+            }
+        finally:
+            try:
+                page.close()
+            except Exception:
+                pass
+
+    def _list_conversations_dom(self, limit: int = 200) -> list[dict[str, Any]]:
+        page = self.session.new_page(self._slack_client_home())
+        results: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        try:
+            self._wait_until_ready(page)
+            DOMExtractor(page).wait_for_element(CHANNEL_SIDEBAR, timeout=10000)
+            for anchor in page.locator("a[href*='/client/']").all():
+                if len(results) >= limit:
+                    break
+                try:
+                    href = anchor.get_attribute("href") or ""
+                    channel_id = self._parse_channel_id_from_text(href)
+                    if not channel_id or channel_id in seen_ids:
+                        continue
+                    name = (anchor.inner_text() or "").strip().split("\n")[0].strip()
+                    if not name:
+                        name = channel_id
+                    seen_ids.add(channel_id)
+                    results.append(
+                        {
+                            "id": channel_id,
+                            "name": name,
+                            "name_normalized": name.lower().replace(" ", "-"),
+                            "is_archived": False,
+                        }
+                    )
+                except Exception:
+                    continue
+            self._set_pagination_stats("conversations_dom", 1, len(results))
+            return results
+        finally:
+            try:
+                page.close()
+            except Exception:
+                pass
+
+    def _auth_test_dom(self) -> dict[str, Any]:
+        page = self.session.new_page(self._slack_client_home())
+        try:
+            self._wait_until_ready(page)
+            team_id = self._parse_workspace_id_from_text(page.url or "")
+            if not team_id:
+                team_id = self.config.slack_workspace_id or None
+            return {
+                "ok": True,
+                "user": "browser_session",
+                "user_id": "browser_session",
+                "team_id": team_id,
+                "team": team_id,
+            }
+        finally:
+            try:
+                page.close()
+            except Exception:
+                pass
 
     def reset_stats(self) -> None:
         super().reset_stats()
