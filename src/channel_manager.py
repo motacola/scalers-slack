@@ -32,6 +32,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
+from .config_validation import validate_team_channels_config
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,12 @@ class ChannelManager:
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 self.config = json.load(f)
+            validation_errors = validate_team_channels_config(self.config)
+            if validation_errors:
+                error_text = "; ".join(validation_errors[:5])
+                if len(validation_errors) > 5:
+                    error_text += f" (and {len(validation_errors) - 5} more)"
+                raise ValueError(f"Invalid team channel config: {error_text}")
             self._build_indexes()
             logger.info(f"Loaded channel config from {self.config_path}")
         except Exception as e:

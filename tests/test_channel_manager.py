@@ -19,12 +19,16 @@ def test_get_channels_for_member_respects_include_shared(tmp_path):
                 },
                 "shared_channels": {
                     "channels": {
-                        "shared-a": ["Alice", "Bob"],
-                        "shared-b": ["Bob"],
+                        "shared-a": ["Alice"],
                     }
                 },
                 "channel_categories": {},
-                "thread_patterns": {},
+                "thread_patterns": {
+                    "completion_indicators": ["done"],
+                    "blocker_indicators": ["blocked"],
+                    "question_indicators": ["?"],
+                    "urgent_indicators": ["asap"],
+                },
             }
         ),
         encoding="utf-8",
@@ -41,4 +45,3 @@ def test_get_channels_for_member_respects_include_shared(tmp_path):
     assert "client-a" in without_shared
     assert "shared-a" in with_shared
     assert "shared-a" not in without_shared
-
