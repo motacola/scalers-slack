@@ -34,6 +34,24 @@ python3 scripts/dm_daily_digest.py --hours 24 --format html --important --open
 
 ### Monitoring & Health Checks
 
+#### `browser_no_api_smoke.py` ⭐ **Browser-only fallback check**
+Validate Slack/Notion browser flows when API keys are unavailable.
+
+```bash
+# Preferred: force DOM fallbacks and print diagnostics
+python3 scripts/browser_no_api_smoke.py --force-dom
+
+# JSON output for CI/logging
+python3 scripts/browser_no_api_smoke.py --force-dom --json
+```
+
+**Checks:**
+- Slack auth fallback (`auth_test`)
+- Conversations/history/thread extraction via browser DOM
+- Notion page access with browser session
+
+---
+
 #### `browser_health_check.py`
 Test browser automation setup and connectivity.
 

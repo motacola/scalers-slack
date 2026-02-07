@@ -23,6 +23,8 @@ from ..dom_selectors import (
     MESSAGE_CONTAINER,
     MESSAGE_LIST_CONTAINER,
     SEARCH_RESULT,
+    THREAD_MESSAGE_CONTAINER,
+    THREAD_PANE_CONTAINER,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,6 +116,7 @@ class SlackBrowserClient(BaseBrowserClient):
         dom_message: dict[str, Any],
         channel_id: str | None = None,
         page_url: str | None = None,
+        thread_ts: str | None = None,
     ) -> dict[str, Any] | None:
         text = str(dom_message.get("text") or "").strip()
         permalink = str(dom_message.get("permalink") or "").strip()
@@ -127,6 +130,7 @@ class SlackBrowserClient(BaseBrowserClient):
             ts = self._normalize_ts(self._parse_ts_from_permalink(permalink))
         if not text and not ts and not permalink:
             return None
+        normalized_thread_ts = self._normalize_ts(thread_ts or dom_message.get("thread_ts")) or ts
         user_name = str(dom_message.get("user") or "").strip()
         user_id = str(dom_message.get("user_id") or "").strip()
         user = user_id or user_name or "unknown"
@@ -135,7 +139,7 @@ class SlackBrowserClient(BaseBrowserClient):
             "text": text,
             "user": user,
             "ts": ts or "",
-            "thread_ts": ts or "",
+            "thread_ts": normalized_thread_ts or "",
             "permalink": permalink,
             "channel_id": parsed_channel,
             "channel": {"id": parsed_channel} if parsed_channel else {},
@@ -154,6 +158,164 @@ class SlackBrowserClient(BaseBrowserClient):
 
     def _sort_messages_desc(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return sorted(messages, key=lambda item: self._ts_to_float(item.get("ts")) or 0.0, reverse=True)
+
+    def _sort_messages_asc(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(messages, key=lambda item: self._ts_to_float(item.get("ts")) or 0.0)
+
+    def _thread_url_candidates(self, channel_id: str, thread_ts: str) -> list[str]:
+        normalized = self._normalize_ts(thread_ts) or thread_ts
+        compact_ts = normalized.replace(".", "")
+        channel_url = self._channel_url(channel_id)
+        candidates = [
+            f"{channel_url}?thread_ts={normalized}&cid={channel_id}",
+            f"{channel_url}/thread/{channel_id}-{normalized}",
+            f"{channel_url}/thread/{channel_id}-{compact_ts}",
+        ]
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for candidate in candidates:
+            candidate = candidate.strip()
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            ordered.append(candidate)
+        return ordered
+
+    def _collect_messages_from_scope(
+        self,
+        page,
+        extractor: DOMExtractor,
+        selector_set: list[str],
+        messages: list[dict[str, Any]],
+        seen: set[str],
+        channel_id: str,
+        limit: int,
+        thread_ts: str | None = None,
+        scope=None,
+    ) -> int:
+        added = 0
+        require_text = thread_ts is None
+        for selector in selector_set:
+            try:
+                elements = (scope.locator(selector) if scope is not None else page.locator(selector)).all()
+            except Exception:
+                continue
+            for element in elements:
+                if len(messages) >= limit:
+                    return added
+                data = extractor.extract_message_data(element, require_text=require_text)
+                if not data:
+                    continue
+                api_message = self._build_api_like_message(
+                    data,
+                    channel_id=channel_id,
+                    page_url=page.url,
+                    thread_ts=thread_ts,
+                )
+                if not api_message:
+                    continue
+                key = api_message.get("ts") or api_message.get("permalink") or (
+                    f"{api_message.get('user')}::{api_message.get('text')}"
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                messages.append(api_message)
+                added += 1
+        return added
+
+    def _find_first_visible_locator(self, page, selectors: list[str], timeout: int = 1500):
+        for selector in selectors:
+            try:
+                locator = page.locator(selector).first
+                if locator.count() > 0 and locator.is_visible(timeout=timeout):
+                    return locator
+            except Exception:
+                continue
+        return None
+
+    def _fetch_thread_replies_dom(
+        self,
+        channel_id: str,
+        thread_ts: str,
+        limit: int = 200,
+        max_scrolls: int = 8,
+    ) -> list[dict[str, Any]]:
+        normalized_thread_ts = self._normalize_ts(thread_ts)
+        if not normalized_thread_ts:
+            return []
+
+        messages: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        total_pages = 0
+
+        for url in self._thread_url_candidates(channel_id, normalized_thread_ts):
+            page = self.session.new_page(url)
+            try:
+                self._wait_until_ready(page)
+                extractor = DOMExtractor(page)
+                thread_scope = self._find_first_visible_locator(page, THREAD_PANE_CONTAINER.get_all(), timeout=2500)
+                if thread_scope is None:
+                    extractor.wait_for_element(MESSAGE_LIST_CONTAINER, timeout=8000)
+
+                self._collect_messages_from_scope(
+                    page,
+                    extractor,
+                    THREAD_MESSAGE_CONTAINER.get_all(),
+                    messages,
+                    seen,
+                    channel_id=channel_id,
+                    limit=limit,
+                    thread_ts=normalized_thread_ts,
+                    scope=thread_scope,
+                )
+
+                scrolls = 0
+                stagnant_rounds = 0
+                while (
+                    len(messages) < limit
+                    and thread_scope is not None
+                    and scrolls < max_scrolls
+                    and stagnant_rounds < 3
+                ):
+                    before = len(messages)
+                    try:
+                        thread_scope.evaluate("el => el.scrollBy(0, -Math.max(el.clientHeight * 1.8, 1400))")
+                    except Exception:
+                        try:
+                            page.mouse.wheel(0, -2200)
+                        except Exception:
+                            break
+                    page.wait_for_timeout(900)
+                    added = self._collect_messages_from_scope(
+                        page,
+                        extractor,
+                        THREAD_MESSAGE_CONTAINER.get_all(),
+                        messages,
+                        seen,
+                        channel_id=channel_id,
+                        limit=limit,
+                        thread_ts=normalized_thread_ts,
+                        scope=thread_scope,
+                    )
+                    scrolls += 1
+                    if added <= 0 and len(messages) == before:
+                        stagnant_rounds += 1
+                    else:
+                        stagnant_rounds = 0
+
+                if messages:
+                    total_pages = max(1, scrolls + 1)
+                    break
+            finally:
+                try:
+                    page.close()
+                except Exception:
+                    pass
+
+        sorted_messages = self._sort_messages_asc(messages)
+        self._set_pagination_stats("thread_dom", max(1, total_pages), len(sorted_messages))
+        return sorted_messages[:limit]
 
     def _has_web_token(self, page) -> bool:
         try:
@@ -793,13 +955,22 @@ class SlackBrowserClient(BaseBrowserClient):
             return messages
         except Exception as exc:
             if self._should_fallback_to_dom(exc):
-                logger.warning("Slack API thread replies unavailable; falling back to DOM history approximation.")
+                logger.warning("Slack API thread replies unavailable; falling back to DOM thread extraction.")
                 dom_limit = max(1, limit) * max(1, max_pages)
+                dom_replies = self._fetch_thread_replies_dom(channel_id, thread_ts=thread_ts, limit=dom_limit)
+                if dom_replies:
+                    return dom_replies
+                logger.warning("Thread pane fallback unavailable; using channel history approximation.")
                 history = self._fetch_channel_history_dom(channel_id, limit=max(200, dom_limit))
+                target_thread_ts = self._normalize_ts(thread_ts) or thread_ts
                 replies = [
                     message
                     for message in history
-                    if message.get("thread_ts") == thread_ts or message.get("ts") == thread_ts
+                    if (
+                        (self._normalize_ts(message.get("thread_ts")) or str(message.get("thread_ts") or ""))
+                        == target_thread_ts
+                        or (self._normalize_ts(message.get("ts")) or str(message.get("ts") or "")) == target_thread_ts
+                    )
                 ]
                 return replies[:dom_limit]
             raise

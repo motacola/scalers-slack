@@ -318,6 +318,73 @@ def test_auth_test_falls_back_to_dom(mock_browser_session, browser_config):
     dom_auth.assert_called_once()
 
 
+def test_thread_replies_dom_fallback_uses_thread_extractor_first(mock_browser_session, browser_config):
+    """Thread reply fallback should use thread-pane DOM extraction before history approximation."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+    dom_replies = [{"ts": "1700000000.000001", "thread_ts": "1700000000.000001", "text": "reply", "user": "U1"}]
+
+    with (
+        patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("not_authed")),
+        patch.object(slack_client, "_fetch_thread_replies_dom", return_value=dom_replies) as dom_fetch,
+        patch.object(slack_client, "_fetch_channel_history_dom", return_value=[]) as history_fetch,
+    ):
+        replies = slack_client.fetch_thread_replies_paginated(
+            "C123",
+            thread_ts="1700000000.000001",
+            limit=10,
+            max_pages=2,
+        )
+
+    assert replies == dom_replies
+    dom_fetch.assert_called_once_with("C123", thread_ts="1700000000.000001", limit=20)
+    history_fetch.assert_not_called()
+
+
+def test_thread_replies_dom_fallback_uses_history_if_thread_empty(mock_browser_session, browser_config):
+    """If thread-pane extraction is empty, fallback should still return filtered history replies."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+    history_messages = [
+        {"ts": "1700000000.000001", "thread_ts": "1700000000.000001", "text": "root"},
+        {"ts": "1700000000.000002", "thread_ts": "1700000000.000001", "text": "reply"},
+        {"ts": "1700000000.000003", "thread_ts": "1700000000.000003", "text": "other"},
+    ]
+
+    with (
+        patch.object(slack_client, "_slack_api_call", side_effect=RuntimeError("not_authed")),
+        patch.object(slack_client, "_fetch_thread_replies_dom", return_value=[]),
+        patch.object(slack_client, "_fetch_channel_history_dom", return_value=history_messages) as history_fetch,
+    ):
+        replies = slack_client.fetch_thread_replies_paginated(
+            "C123",
+            thread_ts="1700000000.000001",
+            limit=10,
+            max_pages=2,
+        )
+
+    assert len(replies) == 2
+    assert all(msg["thread_ts"] == "1700000000.000001" for msg in replies)
+    history_fetch.assert_called_once_with("C123", limit=200)
+
+
+def test_build_api_like_message_allows_thread_override(mock_browser_session, browser_config):
+    """DOM conversion should preserve explicit thread_ts override for thread-pane extraction."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+
+    message = slack_client._build_api_like_message(
+        {
+            "text": "hello",
+            "ts": "1700000000.000001",
+            "thread_ts": "1700000000.000001",
+            "permalink": "https://example.slack.com/archives/C123/p1700000000000001",
+        },
+        channel_id="C123",
+        thread_ts="1709999999.123456",
+    )
+
+    assert message is not None
+    assert message["thread_ts"] == "1709999999.123456"
+
+
 def test_dom_snapshot_written(tmp_path):
     """Test that DOM snapshots are written when enabled."""
     config = BrowserAutomationConfig(recordings_dir=str(tmp_path), html_snapshot_on_error=True)

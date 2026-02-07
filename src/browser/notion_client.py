@@ -79,34 +79,146 @@ class NotionBrowserClient(BaseBrowserClient):
             return page_id_or_url
         return f"{self.config.notion_base_url.rstrip('/')}/{page_id_or_url}"
 
+    def _locator_visible(self, locator, timeout: int = 1200) -> bool:
+        try:
+            if locator.count() <= 0:
+                return False
+        except Exception:
+            return False
+        try:
+            return bool(locator.is_visible(timeout=timeout))
+        except Exception:
+            return True
+
+    def _first_visible_locator(self, locators: list[Any], timeout: int = 1200):
+        for locator in locators:
+            if locator is None:
+                continue
+            if self._locator_visible(locator, timeout=timeout):
+                return locator
+        return None
+
+    def _find_notion_editor(self, page):
+        scoped_roots: list[Any] = [self._get_main_locator(page)]
+        for selector in NOTION_PAGE_CANVAS.get_all():
+            scoped_roots.append(page.locator(selector).first)
+        scoped_roots.append(page)
+
+        for root in scoped_roots:
+            for selector in NOTION_CONTENT_EDITABLE.get_all():
+                try:
+                    locator = root.locator(selector).last if root is not page else page.locator(selector).last
+                    if self._locator_visible(locator):
+                        return locator
+                except Exception:
+                    continue
+        for selector in ["div[role='textbox']", "div[contenteditable='true'][data-slate-editor='true']"]:
+            try:
+                locator = page.locator(selector).last
+                if self._locator_visible(locator):
+                    return locator
+            except Exception:
+                continue
+        return None
+
+    def _focus_canvas(self, page) -> None:
+        for selector in [*NOTION_PAGE_CANVAS.get_all(), *NOTION_MAIN.get_all()]:
+            try:
+                locator = page.locator(selector).first
+                if self._locator_visible(locator):
+                    locator.click(timeout=3000)
+                    return
+            except Exception:
+                continue
+
+    def _verify_text_present(self, page, text: str, attempts: int = 4) -> bool:
+        snippet = " ".join(text.strip().split())
+        if not snippet:
+            return True
+        snippet = snippet[:80]
+        for _ in range(max(1, attempts)):
+            try:
+                if page.get_by_text(snippet, exact=False).first.count() > 0:
+                    return True
+            except Exception:
+                pass
+            page.wait_for_timeout(350)
+        return False
+
+    def _verify_property_value(self, page, value_cell, date_value: str) -> bool:
+        if not date_value:
+            return True
+        for _ in range(4):
+            try:
+                rendered = value_cell.evaluate(
+                    "el => (el.value || el.textContent || el.innerText || '').trim()"
+                )
+                if isinstance(rendered, str) and date_value in rendered:
+                    return True
+            except Exception:
+                pass
+            try:
+                if page.get_by_text(date_value, exact=False).first.count() > 0:
+                    return True
+            except Exception:
+                pass
+            page.wait_for_timeout(300)
+        return False
+
+    def _find_property_label(self, page, property_name: str):
+        candidates = [
+            page.get_by_text(property_name, exact=True).first,
+            page.get_by_text(property_name, exact=False).first,
+            page.locator(f"text={property_name}").first,
+        ]
+        return self._first_visible_locator(candidates, timeout=1500)
+
+    def _find_property_value_cell(self, label):
+        row = label.locator("xpath=ancestor::div[@role='row' or @role='listitem' or @data-property-id][1]")
+        if not self._locator_visible(row):
+            row = label.locator("xpath=ancestor::div[1]")
+        if not self._locator_visible(row):
+            return None
+        candidates = [
+            row.locator("css=input[type='date']").first,
+            row.locator("css=input").first,
+            row.locator("css=div[contenteditable='true']").first,
+            row.locator("css=div[role='textbox']").first,
+            row.locator("css=div[role='button']").first,
+        ]
+        value_cell = self._first_visible_locator(candidates, timeout=1200)
+        if value_cell is not None:
+            return value_cell
+        fallback = label.locator("xpath=following::div[@contenteditable='true' or @role='textbox' or @role='button'][1]")
+        if self._locator_visible(fallback):
+            return fallback
+        return None
+
     def append_audit_note(self, page_id: str, text: str) -> str:
         url = self._page_url(page_id)
 
         def action(page):
-            page.wait_for_timeout(1500)
-            page.wait_for_selector(NOTION_MAIN.primary, timeout=15000)
-            
-            # Use content editable selectors
-            editor = None
-            for sel in NOTION_CONTENT_EDITABLE.get_all():
-                loc = page.locator(f"{NOTION_MAIN.primary} {sel}").last
-                if loc.count() > 0:
-                    editor = loc
-                    break
-            
-            if not editor:
-                for sel in NOTION_CONTENT_EDITABLE.get_all():
-                    loc = page.locator(sel).last
-                    if loc.count() > 0:
-                        editor = loc
-                        break
-            
-            if editor:
-                editor.click(timeout=15000)
+            page.wait_for_timeout(1000)
+            self._wait_for_main(page, timeout=15000)
+            for attempt in range(3):
+                editor = self._find_notion_editor(page)
+                if editor is None:
+                    self._focus_canvas(page)
+                    page.wait_for_timeout(500)
+                    continue
+                try:
+                    editor.click(timeout=6000)
+                except Exception:
+                    self._focus_canvas(page)
+                    editor.click(timeout=6000)
                 page.keyboard.type(text)
                 page.keyboard.press("Enter")
-            else:
-                logger.error("Could not find Notion editor")
+                if self._verify_text_present(page, text):
+                    return
+                page.wait_for_timeout(500)
+                if attempt < 2:
+                    self._focus_canvas(page)
+            raise RuntimeError("Could not append audit note in Notion editor.")
 
         self._with_page(url, action)
         self.stats["ui_actions"] += 1
@@ -120,23 +232,30 @@ class NotionBrowserClient(BaseBrowserClient):
         date_value = date_iso.split("T")[0] if date_iso else ""
 
         def action(page):
-            page.wait_for_timeout(1500)
-            label = page.get_by_text(property_name, exact=True)
-            label.wait_for(timeout=10000)
-
-            row = label.locator("xpath=ancestor::div[@role='row' or @role='listitem' or @data-property-id][1]")
-            if row.count() == 0:
-                row = label.locator("xpath=..")
-
-            value_cell = row.locator(
-                "css=div[contenteditable='true'], css=div[role='button'], css=div[role='textbox']"
-            ).first
-            value_cell.click()
-            page.keyboard.press("Control+A")
-            page.keyboard.press("Meta+A")
-            if date_value:
-                page.keyboard.type(date_value)
-            page.keyboard.press("Enter")
+            page.wait_for_timeout(1000)
+            self._wait_for_main(page, timeout=15000)
+            for attempt in range(3):
+                label = self._find_property_label(page, property_name)
+                if label is None:
+                    page.wait_for_timeout(600)
+                    continue
+                value_cell = self._find_property_value_cell(label)
+                if value_cell is None:
+                    self._focus_canvas(page)
+                    page.wait_for_timeout(500)
+                    continue
+                value_cell.click(timeout=5000)
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Meta+A")
+                if date_value:
+                    page.keyboard.type(date_value)
+                page.keyboard.press("Enter")
+                if self._verify_property_value(page, value_cell, date_value):
+                    return
+                if attempt < 2:
+                    self._focus_canvas(page)
+                    page.wait_for_timeout(600)
+            raise RuntimeError(f"Could not update Notion property '{property_name}'.")
 
         self._with_page(url, action)
         self.stats["ui_actions"] += 1

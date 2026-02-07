@@ -124,6 +124,27 @@ SEARCH_RESULT = SelectorSet(
     ],
 )
 
+# Thread pane containers
+THREAD_PANE_CONTAINER = SelectorSet(
+    primary='[data-qa="thread_view_messages"]',
+    fallbacks=[
+        '[data-qa="thread_view"]',
+        '[aria-label*="Thread"] [data-qa="virtual_list"]',
+        ".p-thread_view",
+        ".p-workspace__secondary_view",
+    ],
+)
+
+# Messages inside thread pane
+THREAD_MESSAGE_CONTAINER = SelectorSet(
+    primary='[data-qa="thread_view_messages"] [data-qa="message_container"]',
+    fallbacks=[
+        '[data-qa="thread_view"] [data-qa="message_container"]',
+        ".p-thread_view .c-message",
+        ".p-workspace__secondary_view .c-message",
+    ],
+)
+
 # Login indicators
 LOGIN_EMAIL_INPUT = SelectorSet(
     primary='[data-qa="login_email"]',
@@ -260,7 +281,7 @@ class DOMExtractor:
                 continue
         return False
 
-    def extract_message_data(self, message_element: Any) -> dict[str, Any] | None:
+    def extract_message_data(self, message_element: Any, require_text: bool = True) -> dict[str, Any] | None:
         """Extract all data from a message element."""
         try:
             data = {
@@ -271,8 +292,8 @@ class DOMExtractor:
                 "permalink": self._extract_permalink(message_element),
             }
 
-            # Only return if we have at least text
-            if data["text"]:
+            # In thread panes some entries can render with minimal text; allow metadata-only extraction.
+            if data["text"] or (not require_text and (data["ts"] or data["permalink"] or data["user_id"])):
                 return data
 
         except Exception:
