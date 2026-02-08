@@ -85,7 +85,7 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
 
         # Navigate to channel
         url = f"{self.config.slack_client_url}/{workspace_id}/channels/{name}"
-        page = self.session.navigate(url)
+        page = self.session.new_page(url)
 
         # Wait for page to load
         time.sleep(2)
@@ -183,7 +183,7 @@ class EnhancedSlackBrowserClient(SlackBrowserClient):
         encoded_query = query.replace(" ", "%20")
 
         url = f"{self.config.slack_client_url}/{workspace_id}/search/{encoded_query}"
-        page = self.session.navigate(url)
+        page = self.session.new_page(url)
 
         # Wait for search results to load
         time.sleep(3)

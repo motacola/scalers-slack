@@ -9,13 +9,18 @@ from typing import Any, Callable, TypedDict, cast
 
 logger = logging.getLogger(__name__)
 
+
 class BrowserError(Exception):
     """Base class for browser automation errors."""
+
     pass
+
 
 class SessionExpiredError(BrowserError):
     """Raised when a browser session has expired and needs refresh."""
+
     pass
+
 
 class LoadBalancer:
     """Manages load balancing for distributed environments."""
@@ -228,6 +233,7 @@ class BrowserAutomationConfig:
     proxy_username: str | None = None
     proxy_password: str | None = None
 
+
 _sync_playwright: Any = None
 try:
     from playwright.sync_api import sync_playwright as _sync_playwright
@@ -277,7 +283,7 @@ class BrowserSession:
             }
             if self.config.browser_channel:
                 launch_args["channel"] = self.config.browser_channel
-            
+
             if self.config.proxy_server:
                 proxy_args: dict[str, str] = {"server": self.config.proxy_server}
                 if self.config.proxy_username:
@@ -290,7 +296,7 @@ class BrowserSession:
                 # Ensure user_data_dir is absolute to avoid relative path confusion
                 data_dir = os.path.abspath(self.config.user_data_dir)
                 os.makedirs(data_dir, exist_ok=True)
-                
+
                 try:
                     self._context = self._playwright.chromium.launch_persistent_context(
                         data_dir,
@@ -346,7 +352,7 @@ class BrowserSession:
             self._context = None
             self._browser = None
             self._playwright = None
- 
+
     def refresh_session(self) -> None:
         """Force a browser session refresh by restarting it."""
         logger.info("Refreshing browser session...")
@@ -451,23 +457,23 @@ class BrowserSession:
     def _apply_overlay(self, page, text: str) -> None:
         if not self.config.overlay_enabled:
             return
-        
+
         duration = 0.0
         if self._action_start_time > 0:
             duration = time.time() - self._action_start_time
-            
+
         status_text = f"🚀 {text}"
         if duration > 0.1:
             status_text += f" ({duration:.1f}s)"
-            
+
         proxy_info = ""
         if self.config.proxy_server:
             proxy_info = f" | 🌐 {self.config.proxy_server}"
-            
+
         refresh_info = ""
         refresh_age = time.time() - self.last_refresh_time
         if refresh_age > 60:
-            refresh_info = f" | 🕒 Refresh: {int(refresh_age/60)}m ago"
+            refresh_info = f" | 🕒 Refresh: {int(refresh_age / 60)}m ago"
         else:
             refresh_info = f" | 🕒 Refresh: {int(refresh_age)}s ago"
 
@@ -492,7 +498,8 @@ class BrowserSession:
                         el.style.color = '#fff';
                         el.style.fontSize = '13px';
                         el.style.fontWeight = '500';
-                        el.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+                        el.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", ' +
+                            'Roboto, Helvetica, Arial, sans-serif';
                         el.style.borderRadius = '10px';
                         el.style.boxShadow = '0 8px 32px 0 rgba(0, 0, 0, 0.37)';
                         el.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
@@ -556,9 +563,9 @@ class BaseBrowserClient:
                         logger.info("Running page action for %s (attempt %s)", url, attempt + 1)
                     self.session._action_start_time = time.time()
                     self.session._apply_overlay(page, f"Working on {url} ({attempt + 1})")
-                    
+
                     result = func(page)
-                    
+
                     self.session._action_start_time = 0.0
                     logger.info(f"Page action completed successfully for URL: {url}")
                     if self.config.screenshot_on_step:
@@ -582,14 +589,14 @@ class BaseBrowserClient:
                     if self.config.screenshot_on_error:
                         self.session._maybe_screenshot(page, "error")
                     self.session._maybe_dom_snapshot(page, "error")
-                    
+
                     if self.config.auto_recover and self.config.auto_recover_refresh:
                         try:
                             page.reload(wait_until="domcontentloaded", timeout=self.config.timeout_ms)
                             self.session._smart_wait(page)
                         except Exception:
                             pass
-                    
+
                     if retry_on_failure and attempt < max_attempts - 1:
                         time.sleep(self.config.retry_delay_ms / 1000)
                     else:

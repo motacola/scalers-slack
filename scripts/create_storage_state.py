@@ -4,6 +4,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any, cast
 
 from playwright.sync_api import sync_playwright
 
@@ -13,7 +14,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.config_loader import load_config
 
 
-def _extract_slack_token_from_state(state: dict, workspace_id: str | None) -> str | None:
+def _extract_slack_token_from_state(state: Any, workspace_id: str | None) -> str | None:
     origins = state.get("origins", []) if isinstance(state, dict) else []
     for origin in origins:
         if "slack.com" not in origin.get("origin", ""):
@@ -45,7 +46,7 @@ def _extract_slack_token_from_state(state: dict, workspace_id: str | None) -> st
 
 def _extract_slack_token_from_page(page, workspace_id: str | None) -> str | None:
     try:
-        return page.evaluate(
+        token = page.evaluate(
             """
             (workspaceId) => {
                 const keys = ["localConfig_v2", "localConfig"];
@@ -72,6 +73,9 @@ def _extract_slack_token_from_page(page, workspace_id: str | None) -> str | None
             """,
             workspace_id,
         )
+        if isinstance(token, str) and token:
+            return token
+        return None
     except Exception:
         return None
 
@@ -89,7 +93,10 @@ def main() -> int:
     parser.add_argument(
         "--user-data-dir",
         default="",
-        help="Chrome user data dir for persistent context (recommended to match config.browser_automation.user_data_dir)",
+        help=(
+            "Chrome user data dir for persistent context "
+            "(recommended to match config.browser_automation.user_data_dir)"
+        ),
     )
     parser.add_argument(
         "--browser-channel",
@@ -119,7 +126,7 @@ def main() -> int:
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    workspace_id = (args.workspace_id.strip() or config_defaults.get("slack_workspace_id") or None)
+    workspace_id = args.workspace_id.strip() or config_defaults.get("slack_workspace_id") or None
     user_data_dir = (args.user_data_dir or config_defaults.get("user_data_dir") or "").strip() or None
     browser_channel = (args.browser_channel or config_defaults.get("browser_channel") or "").strip() or None
 
@@ -130,21 +137,17 @@ def main() -> int:
             launch_args: dict[str, object] = {"headless": args.headless}
             if browser_channel:
                 launch_args["channel"] = browser_channel
-            context = p.chromium.launch_persistent_context(data_dir, **launch_args)
+            context = p.chromium.launch_persistent_context(data_dir, **cast(Any, launch_args))
             browser = None
         else:
             launch_args = {"headless": args.headless}
             if browser_channel:
                 launch_args["channel"] = browser_channel
-            browser = p.chromium.launch(**launch_args)
+            browser = p.chromium.launch(**cast(Any, launch_args))
             context = browser.new_context()
         page = context.new_page()
 
-        slack_url = (
-            f"https://app.slack.com/client/{workspace_id}"
-            if workspace_id
-            else "https://app.slack.com/client"
-        )
+        slack_url = f"https://app.slack.com/client/{workspace_id}" if workspace_id else "https://app.slack.com/client"
         print("Opening Slack. Please log in if needed, then leave the tab open.")
         page.goto(slack_url, wait_until="domcontentloaded")
 

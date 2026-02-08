@@ -398,7 +398,7 @@ def validate_config(config: dict) -> list[str]:
             errors.append("settings.browser_automation.event_log_path cannot be empty")
 
     projects = config.get("projects", []) if isinstance(config, dict) else []
-    project_names = [p.get("name") for p in projects if isinstance(p, dict) and p.get("name")]
+    project_names = [name for p in projects if isinstance(p, dict) for name in [p.get("name")] if isinstance(name, str)]
     duplicates = {n for n in project_names if project_names.count(n) > 1}
     for dup in sorted(duplicates):
         errors.append(f"project.name must be unique: {dup}")
@@ -457,7 +457,7 @@ def validate_config(config: dict) -> list[str]:
     return errors
 
 
-def validate_team_channels_config(config: dict) -> list[str]:
+def validate_team_channels_config(config: Any) -> list[str]:
     errors: list[str] = []
     errors.extend(_schema_errors(TEAM_CHANNELS_SCHEMA, config, "team_channels"))
 
@@ -477,9 +477,7 @@ def validate_team_channels_config(config: dict) -> list[str]:
                 continue
             for member in members:
                 if member not in known_members:
-                    errors.append(
-                        f"shared channel '{channel}' references unknown team member '{member}'"
-                    )
+                    errors.append(f"shared channel '{channel}' references unknown team member '{member}'")
 
     for member_name, member_data in team_members.items():
         if not isinstance(member_data, dict):
@@ -493,9 +491,7 @@ def validate_team_channels_config(config: dict) -> list[str]:
             if not isinstance(channel, str) or not channel:
                 continue
             if channel in seen_channels:
-                errors.append(
-                    f"team member '{member_name}' has duplicate client channel '{channel}'"
-                )
+                errors.append(f"team member '{member_name}' has duplicate client channel '{channel}'")
             seen_channels.add(channel)
 
     return errors

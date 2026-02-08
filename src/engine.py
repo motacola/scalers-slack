@@ -235,6 +235,7 @@ class ScalersSlackEngine:
             if self.browser_session:
                 try:
                     from .browser import BugHerdBrowserClient
+
                     bugherd_browser = BugHerdBrowserClient(self.browser_session, browser_config)
                     self.bugherd_bridge.set_browser_client(bugherd_browser)
                     logger.info("BugHerd browser client initialized for browser mode")
@@ -369,13 +370,13 @@ class ScalersSlackEngine:
                     "slack_stats": slack_stats,
                 },
             )
-            
+
             # Memory-based thread filtering
             initial_count = len(threads)
-            
+
             # Filter out threads already processed in the past
             threads = [t for t in threads if not self.memory.is_thread_processed(project_name, t.thread_ts)]
-            
+
             if len(threads) < initial_count:
                 skipped = initial_count - len(threads)
                 logger.info(f"Memory: Skipped {skipped} threads already processed for {project_name}")
@@ -458,15 +459,10 @@ class ScalersSlackEngine:
                 json_enabled=self.json_logging,
             )
             run_summary["status"] = "completed"
-            
+
             # Update memory after successful completion
-            self.memory.update_project_sync(
-                project_name, 
-                sync_timestamp, 
-                len(threads),
-                [t.thread_ts for t in threads]
-            )
-            
+            self.memory.update_project_sync(project_name, sync_timestamp, len(threads), [t.thread_ts for t in threads])
+
             return run_summary
         except Exception as exc:
             run_summary["status"] = "failed"
@@ -1188,15 +1184,9 @@ def main() -> None:
     parser.add_argument("--validate-config", action="store_true", help="Validate config and exit")
     parser.add_argument("--summarize", action="store_true", help="Generate an AI standup report")
     parser.add_argument("--update-tickets", action="store_true", help="Update Notion tickets with project activity")
-    parser.add_argument(
-        "--concurrency", type=int, default=1, help="Max number of concurrent project syncs"
-    )
-    parser.add_argument(
-        "--dirty", action="store_true", help="Only sync projects that haven't been synced recently"
-    )
-    parser.add_argument(
-        "--dirty-hours", type=int, default=24, help="The 'dirty' threshold in hours (default: 24)"
-    )
+    parser.add_argument("--concurrency", type=int, default=1, help="Max number of concurrent project syncs")
+    parser.add_argument("--dirty", action="store_true", help="Only sync projects that haven't been synced recently")
+    parser.add_argument("--dirty-hours", type=int, default=24, help="The 'dirty' threshold in hours (default: 24)")
     parser.add_argument("--verbose-browser", action="store_true", help="Enable verbose browser logging")
     parser.add_argument(
         "--keep-browser-open",
@@ -1316,15 +1306,15 @@ def main() -> None:
                 if not last_sync:
                     filtered.append(p_name)
                     continue
-                
+
                 # Convert ISO timestamp to unix
                 try:
-                    last_sync_unix = iso_to_unix_ts(last_sync)
+                    last_sync_unix = float(iso_to_unix_ts(last_sync))
                     if current_time - last_sync_unix > threshold_s:
                         filtered.append(p_name)
                 except Exception:
                     filtered.append(p_name)
-            
+
             logger.info(f"Dirty mode: Filtered {len(projects_to_run)} projects down to {len(filtered)}")
             projects_to_run = filtered
 

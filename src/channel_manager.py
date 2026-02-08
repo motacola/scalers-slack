@@ -29,9 +29,9 @@ Usage:
 import json
 import logging
 import os
-import re
-from typing import Any, Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set, cast
+
 from .config_validation import validate_team_channels_config
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ChannelInfo:
     """Information about a Slack channel."""
+
     channel: str
     client: Optional[str] = None
     priority: str = "medium"
@@ -50,6 +51,7 @@ class ChannelInfo:
 @dataclass
 class ChecklistItem:
     """A channel to check with context."""
+
     channel: str
     reason: str
     priority: str
@@ -116,8 +118,8 @@ class ChannelManager:
                 "completion_indicators": ["done", "complete", "finished"],
                 "blocker_indicators": ["blocked", "waiting"],
                 "question_indicators": ["?"],
-                "urgent_indicators": ["urgent", "asap"]
-            }
+                "urgent_indicators": ["urgent", "asap"],
+            },
         }
 
     def _build_indexes(self) -> None:
@@ -150,13 +152,14 @@ class ChannelManager:
 
     def get_member_config(self, name: str) -> Optional[Dict[str, Any]]:
         """Get full configuration for a team member."""
-        return self.config.get("team_members", {}).get(name)
+        team_members = self.config.get("team_members", {})
+        if not isinstance(team_members, dict):
+            return None
+        value = team_members.get(name)
+        return cast(Optional[Dict[str, Any]], value)
 
     def get_channels_for_member(
-        self,
-        name: str,
-        include_shared: bool = True,
-        include_always_check: bool = True
+        self, name: str, include_shared: bool = True, include_always_check: bool = True
     ) -> List[ChannelInfo]:
         """
         Get all channels relevant to a team member.
@@ -180,23 +183,21 @@ class ChannelManager:
         for ch in member.get("client_channels", []):
             channel_name = ch.get("channel")
             if channel_name and channel_name not in seen:
-                channels.append(ChannelInfo(
-                    channel=channel_name,
-                    client=ch.get("client"),
-                    priority=ch.get("priority", "medium"),
-                    notes=ch.get("notes")
-                ))
+                channels.append(
+                    ChannelInfo(
+                        channel=channel_name,
+                        client=ch.get("client"),
+                        priority=ch.get("priority", "medium"),
+                        notes=ch.get("notes"),
+                    )
+                )
                 seen.add(channel_name)
 
         # Add always_check channels
         if include_always_check:
             for channel_name in member.get("always_check", []):
                 if channel_name not in seen:
-                    channels.append(ChannelInfo(
-                        channel=channel_name,
-                        priority="high",
-                        notes="Always check"
-                    ))
+                    channels.append(ChannelInfo(channel=channel_name, priority="high", notes="Always check"))
                     seen.add(channel_name)
 
         # Add shared channels from shared_channels mapping
@@ -207,21 +208,14 @@ class ChannelManager:
                     continue
                 if not isinstance(members, list) or name not in members:
                     continue
-                channels.append(ChannelInfo(
-                    channel=channel_name,
-                    priority="medium",
-                    notes="Shared channel",
-                    team_members=members
-                ))
+                channels.append(
+                    ChannelInfo(channel=channel_name, priority="medium", notes="Shared channel", team_members=members)
+                )
                 seen.add(channel_name)
 
         return channels
 
-    def get_priority_channels(
-        self,
-        name: str,
-        priority: str = "high"
-    ) -> List[ChannelInfo]:
+    def get_priority_channels(self, name: str, priority: str = "high") -> List[ChannelInfo]:
         """
         Get channels of a specific priority for a team member.
 
@@ -263,7 +257,7 @@ class ChannelManager:
                             client=ch.get("client"),
                             priority=ch.get("priority", "medium"),
                             notes=ch.get("notes"),
-                            team_members=owners
+                            team_members=owners,
                         )
 
         return ChannelInfo(channel=channel, team_members=owners)
@@ -277,7 +271,10 @@ class ChannelManager:
     def get_category_channels(self, category: str) -> List[str]:
         """Get channels in a specific category (standup, pods, tickets, etc.)."""
         cat_data = self.config.get("channel_categories", {}).get(category, {})
-        return cat_data.get("channels", [])
+        channels = cat_data.get("channels", []) if isinstance(cat_data, dict) else []
+        if not isinstance(channels, list):
+            return []
+        return [channel for channel in channels if isinstance(channel, str)]
 
     def get_all_categories(self) -> List[str]:
         """Get list of all channel categories."""
@@ -337,9 +334,7 @@ class ChannelManager:
     # ==================== Daily Checklist Generation ====================
 
     def generate_daily_checklist(
-        self,
-        name: str,
-        include_priorities: List[str] = None
+        self, name: str, include_priorities: Optional[List[str]] = None
     ) -> List[ChecklistItem]:
         """
         Generate an ordered checklist of channels to review.
@@ -362,21 +357,13 @@ class ChannelManager:
         if member:
             for channel in member.get("always_check", []):
                 if channel not in seen:
-                    checklist.append(ChecklistItem(
-                        channel=channel,
-                        reason="Daily check",
-                        priority="high"
-                    ))
+                    checklist.append(ChecklistItem(channel=channel, reason="Daily check", priority="high"))
                     seen.add(channel)
 
         # 2. Ticket channels
         for channel in self.get_category_channels("tickets"):
             if channel not in seen:
-                checklist.append(ChecklistItem(
-                    channel=channel,
-                    reason="Task notifications",
-                    priority="high"
-                ))
+                checklist.append(ChecklistItem(channel=channel, reason="Task notifications", priority="high"))
                 seen.add(channel)
 
         # 3. Client channels by priority
@@ -385,12 +372,14 @@ class ChannelManager:
                 continue
             for ch_info in self.get_priority_channels(name, priority):
                 if ch_info.channel not in seen:
-                    checklist.append(ChecklistItem(
-                        channel=ch_info.channel,
-                        reason=f"{ch_info.client or 'Client'} channel",
-                        priority=priority,
-                        client=ch_info.client
-                    ))
+                    checklist.append(
+                        ChecklistItem(
+                            channel=ch_info.channel,
+                            reason=f"{ch_info.client or 'Client'} channel",
+                            priority=priority,
+                            client=ch_info.client,
+                        )
+                    )
                     seen.add(ch_info.channel)
 
         return checklist
@@ -421,7 +410,9 @@ class ChannelManager:
         """Get keywords to watch for a team member."""
         member = self.get_member_config(name)
         if member:
-            return member.get("keywords_to_watch", [])
+            keywords = member.get("keywords_to_watch", [])
+            if isinstance(keywords, list):
+                return [keyword for keyword in keywords if isinstance(keyword, str)]
         return []
 
     def find_mentions(self, text: str, name: str) -> bool:
@@ -460,7 +451,7 @@ class ChannelManager:
             "team_members": len(self.config.get("team_members", {})),
             "total_channels": len(self.get_all_channels()),
             "categories": self.get_all_categories(),
-            "shared_channels": len(self.config.get("shared_channels", {}).get("channels", {}))
+            "shared_channels": len(self.config.get("shared_channels", {}).get("channels", {})),
         }
 
     def print_member_summary(self, name: str) -> str:
@@ -473,7 +464,7 @@ class ChannelManager:
             f"📋 Channel Summary for {name}",
             f"   Role: {member.get('role', 'N/A')}",
             "",
-            "   🔴 High Priority Channels:"
+            "   🔴 High Priority Channels:",
         ]
 
         for ch in self.get_priority_channels(name, "high"):
@@ -493,6 +484,7 @@ class ChannelManager:
 
 
 # ==================== Convenience Functions ====================
+
 
 def get_channel_manager(config_path: Optional[str] = None) -> ChannelManager:
     """Get or create a ChannelManager instance."""

@@ -11,10 +11,11 @@ from typing import Any, cast
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from src.enhanced_browser_automation import EnhancedSlackBrowserClient
+
 from src.browser_automation import BrowserAutomationConfig, BrowserSession
 from src.cache_manager import CacheManager
 from src.config_loader import load_config
-from src.enhanced_browser_automation import EnhancedSlackBrowserClient
 from src.report_generator import ReportGenerator
 from src.task_processor import (
     Task,
@@ -104,7 +105,7 @@ def fetch_messages_with_cache(
 
     # Cache the result
     cache.set(cache_key, params, messages)
-    return messages
+    return cast(list[dict[str, Any]], messages)
 
 
 def main() -> int:

@@ -34,16 +34,17 @@ Usage:
 import json
 import logging
 import os
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, asdict
 from enum import Enum
+from typing import Any, Dict, List, Optional, cast
 
 logger = logging.getLogger(__name__)
 
 
 class TaskStatus(Enum):
     """Task status enumeration."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETE = "complete"
@@ -53,6 +54,7 @@ class TaskStatus(Enum):
 
 class TaskSource(Enum):
     """Source of task information."""
+
     NOTION = "notion"
     SLACK_STANDUP = "slack_standup"
     SLACK_THREAD = "slack_thread"
@@ -63,6 +65,7 @@ class TaskSource(Enum):
 @dataclass
 class TaskRecord:
     """Represents a task record with all relevant metadata."""
+
     task_id: str
     task_name: str
     assignee: str
@@ -91,6 +94,7 @@ class TaskRecord:
 @dataclass
 class TeamMember:
     """Represents a team member with their channel mappings."""
+
     name: str
     slack_user_id: Optional[str] = None
     channels: Optional[List[str]] = None
@@ -109,6 +113,7 @@ class TeamMember:
 @dataclass
 class StandupEntry:
     """Represents a standup entry from Slack."""
+
     team_member: str
     date: str
     tasks: List[str]
@@ -164,8 +169,8 @@ class TaskMemory:
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
                 "total_tasks_tracked": 0,
-                "total_completions": 0
-            }
+                "total_completions": 0,
+            },
         }
 
     # ==================== Persistence Methods ====================
@@ -219,7 +224,7 @@ class TaskMemory:
         channel: Optional[str] = None,
         notion_url: Optional[str] = None,
         priority: Optional[str] = None,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
     ) -> TaskRecord:
         """
         Add or update a task in memory.
@@ -257,7 +262,7 @@ class TaskMemory:
             priority=priority,
             notes=notes,
             created_at=existing.get("created_at", now) if existing else now,
-            updated_at=now
+            updated_at=now,
         )
 
         self.data["tasks"][task_id] = task.to_dict()
@@ -275,7 +280,7 @@ class TaskMemory:
         confirmed_by: Optional[str] = None,
         source: str = TaskSource.SLACK_THREAD.value,
         channel: Optional[str] = None,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
     ) -> TaskRecord:
         """
         Mark a task as complete with confirmation metadata.
@@ -313,7 +318,7 @@ class TaskMemory:
             priority=existing.get("priority"),
             notes=notes,
             created_at=existing.get("created_at", now),
-            updated_at=now
+            updated_at=now,
         )
 
         self.data["tasks"][task_id] = task.to_dict()
@@ -326,7 +331,12 @@ class TaskMemory:
         logger.info(f"Marked task complete: {task_id} (confirmed by {confirmed_by})")
         return task
 
-    def is_task_complete(self, task_id: str = None, task_name: str = None, assignee: str = None) -> bool:
+    def is_task_complete(
+        self,
+        task_id: Optional[str] = None,
+        task_name: Optional[str] = None,
+        assignee: Optional[str] = None,
+    ) -> bool:
         """
         Check if a task is marked as complete.
 
@@ -355,10 +365,7 @@ class TaskMemory:
         return None
 
     def get_tasks_by_assignee(
-        self,
-        assignee: str,
-        status: Optional[str] = None,
-        date: Optional[str] = None
+        self, assignee: str, status: Optional[str] = None, date: Optional[str] = None
     ) -> List[TaskRecord]:
         """
         Get all tasks for a specific assignee.
@@ -398,7 +405,7 @@ class TaskMemory:
         name: str,
         channels: Optional[List[str]] = None,
         slack_user_id: Optional[str] = None,
-        role: Optional[str] = None
+        role: Optional[str] = None,
     ) -> TeamMember:
         """
         Add or update a team member with their channel mappings.
@@ -412,12 +419,7 @@ class TaskMemory:
         Returns:
             TeamMember object
         """
-        member = TeamMember(
-            name=name,
-            slack_user_id=slack_user_id,
-            channels=channels or [],
-            role=role
-        )
+        member = TeamMember(name=name, slack_user_id=slack_user_id, channels=channels or [], role=role)
 
         self.data["team_members"][name] = member.to_dict()
         self.save()
@@ -444,11 +446,7 @@ class TaskMemory:
     # ==================== Standup Management ====================
 
     def record_standup(
-        self,
-        team_member: str,
-        tasks: List[str],
-        date: Optional[str] = None,
-        timestamp: Optional[str] = None
+        self, team_member: str, tasks: List[str], date: Optional[str] = None, timestamp: Optional[str] = None
     ) -> StandupEntry:
         """
         Record a standup entry for a team member.
@@ -470,7 +468,7 @@ class TaskMemory:
             date=date,
             tasks=tasks,
             timestamp=timestamp or datetime.now().isoformat(),
-            channel="standup"
+            channel="standup",
         )
 
         if date not in self.data["standups"]:
@@ -505,11 +503,7 @@ class TaskMemory:
     # ==================== Discrepancy Detection ====================
 
     def detect_discrepancies(
-        self,
-        notion_tasks: List[Dict[str, Any]],
-        standup_tasks: List[str],
-        team_member: str,
-        date: Optional[str] = None
+        self, notion_tasks: List[Dict[str, Any]], standup_tasks: List[str], team_member: str, date: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Detect discrepancies between Notion tasks and standup tasks.
@@ -538,27 +532,35 @@ class TaskMemory:
         # Tasks in Notion but not in standup
         for norm_name, task in notion_names.items():
             if norm_name and norm_name not in standup_names:
-                discrepancies.append({
-                    "type": "notion_not_in_standup",
-                    "team_member": team_member,
-                    "date": date,
-                    "task_name": task.get("task_name"),
-                    "notion_due_date": task.get("due_date"),
-                    "description": f"Task '{task.get('task_name')}' is in Notion (due {task.get('due_date')}) but not mentioned in standup",
-                    "detected_at": datetime.now().isoformat()
-                })
+                description = (
+                    f"Task '{task.get('task_name')}' is in Notion "
+                    f"(due {task.get('due_date')}) but not mentioned in standup"
+                )
+                discrepancies.append(
+                    {
+                        "type": "notion_not_in_standup",
+                        "team_member": team_member,
+                        "date": date,
+                        "task_name": task.get("task_name"),
+                        "notion_due_date": task.get("due_date"),
+                        "description": description,
+                        "detected_at": datetime.now().isoformat(),
+                    }
+                )
 
         # Tasks in standup but not in Notion
         for norm_name, task_name in standup_names.items():
             if norm_name and norm_name not in notion_names:
-                discrepancies.append({
-                    "type": "standup_not_in_notion",
-                    "team_member": team_member,
-                    "date": date,
-                    "task_name": task_name,
-                    "description": f"Task '{task_name}' mentioned in standup but not found in Notion for this date",
-                    "detected_at": datetime.now().isoformat()
-                })
+                discrepancies.append(
+                    {
+                        "type": "standup_not_in_notion",
+                        "team_member": team_member,
+                        "date": date,
+                        "task_name": task_name,
+                        "description": f"Task '{task_name}' mentioned in standup but not found in Notion for this date",
+                        "detected_at": datetime.now().isoformat(),
+                    }
+                )
 
         # Store discrepancies
         if discrepancies:
@@ -571,7 +573,7 @@ class TaskMemory:
 
     def get_recent_discrepancies(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Get recent discrepancies."""
-        return self.data["discrepancies"][-limit:]
+        return cast(List[Dict[str, Any]], self.data["discrepancies"][-limit:])
 
     # ==================== User Confirmations ====================
 
@@ -580,7 +582,7 @@ class TaskMemory:
         message: str,
         task_name: Optional[str] = None,
         assignee: Optional[str] = None,
-        action: Optional[str] = None
+        action: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Record a user confirmation from chat.
@@ -599,7 +601,7 @@ class TaskMemory:
             "task_name": task_name,
             "assignee": assignee,
             "action": action,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         self.data["confirmations"].append(confirmation)
@@ -615,7 +617,7 @@ class TaskMemory:
                 task_name=task_name,
                 assignee=assignee or "Unknown",
                 source=TaskSource.USER_CONFIRMATION.value,
-                notes=f"User said: {message}"
+                notes=f"User said: {message}",
             )
 
         return confirmation
@@ -641,7 +643,7 @@ class TaskMemory:
             "tasks_by_assignee": {},
             "standups": self.data["standups"].get(date, {}),
             "completed_today": [],
-            "summary": {}
+            "summary": {},
         }
 
         # Group tasks by assignee
@@ -654,8 +656,9 @@ class TaskMemory:
             if task_data.get("due_date") == date:
                 snapshot["tasks_by_assignee"][assignee].append(task_data)
 
-            if (task_data.get("status") == TaskStatus.COMPLETE.value and
-                task_data.get("confirmed_date", "").startswith(date)):
+            if task_data.get("status") == TaskStatus.COMPLETE.value and task_data.get("confirmed_date", "").startswith(
+                date
+            ):
                 snapshot["completed_today"].append(task_data)
 
         # Summary stats
@@ -663,7 +666,7 @@ class TaskMemory:
             "total_tasks_due": sum(len(tasks) for tasks in snapshot["tasks_by_assignee"].values()),
             "total_completed": len(snapshot["completed_today"]),
             "team_members_with_tasks": list(snapshot["tasks_by_assignee"].keys()),
-            "standups_recorded": len(snapshot["standups"])
+            "standups_recorded": len(snapshot["standups"]),
         }
 
         self.data["daily_snapshots"][date] = snapshot
@@ -682,15 +685,13 @@ class TaskMemory:
         """Get daily snapshot for a specific date."""
         if not date:
             date = datetime.now().strftime("%Y-%m-%d")
-        return self.data["daily_snapshots"].get(date)
+        snapshot = self.data["daily_snapshots"].get(date)
+        return cast(Optional[Dict[str, Any]], snapshot)
 
     # ==================== Utility Methods ====================
 
     def get_team_member_tasks(
-        self,
-        name: str,
-        date: Optional[str] = None,
-        include_completed: bool = False
+        self, name: str, date: Optional[str] = None, include_completed: bool = False
     ) -> Dict[str, Any]:
         """
         Get comprehensive task information for a team member.
@@ -706,14 +707,14 @@ class TaskMemory:
         if not date:
             date = datetime.now().strftime("%Y-%m-%d")
 
-        result = {
+        result: Dict[str, Any] = {
             "team_member": name,
             "date": date,
             "notion_tasks": [],
             "standup_tasks": [],
             "completed_tasks": [],
             "channels": self.get_channels_for_member(name),
-            "discrepancies": []
+            "discrepancies": [],
         }
 
         # Get tasks from memory
@@ -765,10 +766,7 @@ class TaskMemory:
             cleared += 1
 
         # Clear old discrepancies
-        self.data["discrepancies"] = [
-            d for d in self.data["discrepancies"]
-            if d.get("date", "") >= cutoff
-        ]
+        self.data["discrepancies"] = [d for d in self.data["discrepancies"] if d.get("date", "") >= cutoff]
 
         if cleared > 0:
             self.save()
@@ -785,15 +783,12 @@ class TaskMemory:
             "standup_days": len(self.data["standups"]),
             "discrepancies": len(self.data["discrepancies"]),
             "snapshots": len(self.data["daily_snapshots"]),
-            "last_updated": self.data["metadata"]["updated_at"]
+            "last_updated": self.data["metadata"]["updated_at"],
         }
 
     def get_summary(self) -> Dict[str, Any]:
         """Get a comprehensive summary of the task memory."""
-        completed_count = sum(
-            1 for t in self.data["tasks"].values()
-            if t.get("status") == TaskStatus.COMPLETE.value
-        )
+        completed_count = sum(1 for t in self.data["tasks"].values() if t.get("status") == TaskStatus.COMPLETE.value)
 
         # Count standups recorded today
         today = datetime.now().strftime("%Y-%m-%d")
@@ -807,11 +802,12 @@ class TaskMemory:
             "standups_recorded": len(today_standups),
             "total_completions": self.data["metadata"]["total_completions"],
             "discrepancies": len(self.data["discrepancies"]),
-            "last_updated": self.data["metadata"]["updated_at"]
+            "last_updated": self.data["metadata"]["updated_at"],
         }
 
 
 # ==================== Convenience Functions ====================
+
 
 def get_task_memory(memory_path: Optional[str] = None) -> TaskMemory:
     """Get or create a TaskMemory instance."""
@@ -829,9 +825,9 @@ def setup_default_team(memory: TaskMemory) -> None:
             "ss-eds-pumps-website-management",
             "ss-awful-nice-guys-website-management",
             "ss-aaa-electrical-website-management",
-            "standup"
+            "standup",
         ],
-        role="Web Developer"
+        role="Web Developer",
     )
 
     memory.add_team_member(
@@ -841,9 +837,9 @@ def setup_default_team(memory: TaskMemory) -> None:
             "ss-calgary-website-management",
             "ss-spence-and-daves-website-management",
             "ss-parker-and-co-website-management",
-            "standup"
+            "standup",
         ],
-        role="Web Developer"
+        role="Web Developer",
     )
 
     memory.add_team_member(
@@ -853,9 +849,9 @@ def setup_default_team(memory: TaskMemory) -> None:
             "ss-lake-county-mechanical-website-hosting",
             "ss-trips-website-management",
             "ss-performance-of-maine-website-management",
-            "standup"
+            "standup",
         ],
-        role="Web Developer"
+        role="Web Developer",
     )
 
     logger.info("Set up default team members")

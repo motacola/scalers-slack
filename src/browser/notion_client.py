@@ -5,22 +5,23 @@ import re
 import time
 from typing import Any, cast
 
-from .base import (
-    BaseBrowserClient,
-    BrowserAutomationConfig,
-    BrowserSession,
-    SessionExpiredError,
-)
 from ..dom_selectors import (
     NOTION_CONTENT_EDITABLE,
     NOTION_MAIN,
     NOTION_PAGE_CANVAS,
     NOTION_READY_INDICATORS,
 )
+from .base import (
+    BaseBrowserClient,
+    BrowserAutomationConfig,
+    BrowserSession,
+    SessionExpiredError,
+)
 
 logger = logging.getLogger(__name__)
 DATE_VALUE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ISO_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T")
+
 
 class NotionBrowserClient(BaseBrowserClient):
     supports_verification = False
@@ -67,7 +68,7 @@ class NotionBrowserClient(BaseBrowserClient):
                     if page.query_selector(sel):
                         ready = True
                         break
-                
+
                 if ready:
                     if self.config.auto_save_storage_state:
                         self.session.save_storage_state()
@@ -153,9 +154,7 @@ class NotionBrowserClient(BaseBrowserClient):
             return True
         for _ in range(4):
             try:
-                rendered = value_cell.evaluate(
-                    "el => (el.value || el.textContent || el.innerText || '').trim()"
-                )
+                rendered = value_cell.evaluate("el => (el.value || el.textContent || el.innerText || '').trim()")
                 if isinstance(rendered, str) and date_value in rendered:
                     return True
             except Exception:
@@ -269,7 +268,9 @@ class NotionBrowserClient(BaseBrowserClient):
         value_cell = self._first_visible_locator(candidates, timeout=1200)
         if value_cell is not None:
             return value_cell
-        fallback = label.locator("xpath=following::div[@contenteditable='true' or @role='textbox' or @role='button'][1]")
+        fallback = label.locator(
+            "xpath=following::div[@contenteditable='true' or @role='textbox' or @role='button'][1]"
+        )
         if self._locator_visible(fallback):
             return fallback
         return None
@@ -350,9 +351,11 @@ class NotionBrowserClient(BaseBrowserClient):
 
     def reset_stats(self) -> None:
         super().reset_stats()
-        self.stats.update({
-            "ui_actions": 0,
-        })
+        self.stats.update(
+            {
+                "ui_actions": 0,
+            }
+        )
 
     def get_stats(self) -> dict[str, Any]:
         return dict(self.stats)
@@ -407,17 +410,20 @@ class NotionBrowserClient(BaseBrowserClient):
                             link = item.locator("a").first
                             if link.count() > 0:
                                 href = link.get_attribute("href") or ""
-                        results.append({
-                            "title": title,
-                            "url": href if href.startswith("http") else f"{self.config.notion_base_url}{href}",
-                            "index": i,
-                        })
+                        results.append(
+                            {
+                                "title": title,
+                                "url": href if href.startswith("http") else f"{self.config.notion_base_url}{href}",
+                                "index": i,
+                            }
+                        )
                     except Exception:
                         continue
                 page.keyboard.press("Escape")
             except Exception as e:
                 logger.warning(f"Search failed: {e}")
             return results
+
         return self._with_page(start_url, action) or []
 
     def navigate_to_database(self, database_url: str) -> dict:
@@ -467,10 +473,12 @@ class NotionBrowserClient(BaseBrowserClient):
             except Exception as e:
                 logger.warning(f"Database navigation failed: {e}")
             return result
+
         return self._with_page(database_url, action) or {"url": database_url, "entries": [], "view_type": "unknown"}
 
     def extract_page_content(self, page_id_or_url: str) -> dict:
         url = self._page_url(page_id_or_url)
+
         def action(page):
             result = {"url": url, "title": "", "properties": {}, "content_blocks": [], "text_content": ""}
             try:
@@ -507,7 +515,14 @@ class NotionBrowserClient(BaseBrowserClient):
             except Exception as e:
                 logger.warning(f"Page content extraction failed: {e}")
             return result
-        return self._with_page(url, action) or {"url": url, "title": "", "properties": {}, "content_blocks": [], "text_content": ""}
+
+        return self._with_page(url, action) or {
+            "url": url,
+            "title": "",
+            "properties": {},
+            "content_blocks": [],
+            "text_content": "",
+        }
 
     def find_ticket_by_name(self, project_name: str, hub_url: str | None = None) -> dict | None:
         results = self.search_pages_browser(project_name, max_results=5)
@@ -530,7 +545,9 @@ class NotionBrowserClient(BaseBrowserClient):
             try:
                 page.wait_for_timeout(2000)
                 if status_filter:
-                    filter_btn = page.locator("div[class*='filter'], button[class*='filter'], div[data-testid='filter']").first
+                    filter_btn = page.locator(
+                        "div[class*='filter'], button[class*='filter'], div[data-testid='filter']"
+                    ).first
                     if filter_btn.count() > 0:
                         filter_btn.click()
                         page.wait_for_timeout(500)
@@ -538,7 +555,11 @@ class NotionBrowserClient(BaseBrowserClient):
                         if status_option.count() > 0:
                             status_option.click()
                             page.wait_for_timeout(1000)
-                entries = page.locator("a[href*='notion.so'][data-block-id], div[data-block-id] a[href*='notion.so'], tr[data-block-id], div[class*='row'][data-block-id]").all()
+                entries = page.locator(
+                    "a[href*='notion.so'][data-block-id], "
+                    "div[data-block-id] a[href*='notion.so'], "
+                    "tr[data-block-id], div[class*='row'][data-block-id]"
+                ).all()
                 for entry in entries[:100]:
                     try:
                         ticket = {}
@@ -551,7 +572,9 @@ class NotionBrowserClient(BaseBrowserClient):
                             link = entry.locator("a[href*='notion.so']").first
                             if link.count() > 0:
                                 ticket["url"] = link.get_attribute("href")
-                        status_el = entry.locator("div[class*='status'], span[class*='tag'], div[class*='select']").first
+                        status_el = entry.locator(
+                            "div[class*='status'], span[class*='tag'], div[class*='select']"
+                        ).first
                         if status_el.count() > 0:
                             ticket["status"] = status_el.inner_text().strip()
                         if ticket.get("title"):
@@ -561,6 +584,7 @@ class NotionBrowserClient(BaseBrowserClient):
             except Exception as e:
                 logger.warning(f"Hub navigation failed: {e}")
             return tickets
+
         return self._with_page(hub_url, action) or []
 
     def click_ticket_and_extract(self, hub_url: str, ticket_title: str) -> dict | None:
@@ -597,10 +621,12 @@ class NotionBrowserClient(BaseBrowserClient):
             except Exception as e:
                 logger.warning(f"Ticket click and extract failed: {e}")
             return None
+
         return cast(dict[Any, Any] | None, self._with_page(hub_url, action))
 
     def update_ticket_property_browser(self, page_id_or_url: str, property_name: str, new_value: str) -> bool:
         url = self._page_url(page_id_or_url)
+
         def action(page):
             try:
                 page.wait_for_timeout(1500)
@@ -609,10 +635,14 @@ class NotionBrowserClient(BaseBrowserClient):
                     property_label = page.get_by_text(property_name, exact=False).first
                 if property_label.count() == 0:
                     return False
-                row = property_label.locator("xpath=ancestor::div[@role='row' or @role='listitem' or @data-property-id][1]")
+                row = property_label.locator(
+                    "xpath=ancestor::div[@role='row' or @role='listitem' or @data-property-id][1]"
+                )
                 if row.count() == 0:
                     row = property_label.locator("xpath=..")
-                value_cell = row.locator("div[contenteditable='true'], div[role='button'], div[role='textbox'], div[class*='value']").first
+                value_cell = row.locator(
+                    "div[contenteditable='true'], div[role='button'], div[role='textbox'], div[class*='value']"
+                ).first
                 if value_cell.count() > 0:
                     value_cell.click()
                     page.wait_for_timeout(300)
@@ -628,4 +658,5 @@ class NotionBrowserClient(BaseBrowserClient):
                 logger.warning(f"Property update failed: {e}")
                 self.stats["errors"] += 1
             return False
+
         return bool(self._with_page(url, action))

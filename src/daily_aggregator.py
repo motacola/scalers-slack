@@ -29,8 +29,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .task_memory import TaskMemory, TaskStatus, TaskSource
-from .channel_manager import ChannelManager, ChecklistItem
+from .channel_manager import ChannelManager
+from .task_memory import TaskMemory, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,7 @@ class DailyAggregator:
     - ChannelManager: Channel priorities, patterns
     """
 
-    def __init__(
-        self,
-        task_memory: Optional[TaskMemory] = None,
-        channel_manager: Optional[ChannelManager] = None
-    ):
+    def __init__(self, task_memory: Optional[TaskMemory] = None, channel_manager: Optional[ChannelManager] = None):
         """
         Initialize DailyAggregator.
 
@@ -61,11 +57,7 @@ class DailyAggregator:
 
     # ==================== Daily Summaries ====================
 
-    def get_daily_summary(
-        self,
-        name: str,
-        date: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def get_daily_summary(self, name: str, date: Optional[str] = None) -> Dict[str, Any]:
         """
         Get comprehensive daily summary for a team member.
 
@@ -107,75 +99,45 @@ class DailyAggregator:
             "team_member": name,
             "date": date,
             "generated_at": datetime.now().isoformat(),
-
             # Task counts
             "task_counts": {
                 "total": len(pending_tasks) + len(in_progress_tasks) + len(completed_tasks),
                 "pending": len(pending_tasks),
                 "in_progress": len(in_progress_tasks),
-                "completed": len(completed_tasks)
+                "completed": len(completed_tasks),
             },
-
             # Tasks by status
             "pending_tasks": [
-                {
-                    "name": t.task_name,
-                    "source": t.source,
-                    "priority": t.priority,
-                    "due_date": t.due_date
-                }
+                {"name": t.task_name, "source": t.source, "priority": t.priority, "due_date": t.due_date}
                 for t in pending_tasks
             ],
             "in_progress_tasks": [
-                {
-                    "name": t.task_name,
-                    "source": t.source,
-                    "priority": t.priority,
-                    "notes": t.notes
-                }
+                {"name": t.task_name, "source": t.source, "priority": t.priority, "notes": t.notes}
                 for t in in_progress_tasks
             ],
             "completed_tasks": [
-                {
-                    "name": t.task_name,
-                    "confirmed_by": t.confirmed_by,
-                    "source": t.source
-                }
-                for t in completed_tasks
+                {"name": t.task_name, "confirmed_by": t.confirmed_by, "source": t.source} for t in completed_tasks
             ],
-
             # Standup info
             "standup": {
                 "posted": standup is not None,
                 "tasks": standup.tasks if standup else [],
-                "timestamp": standup.timestamp if standup else None
+                "timestamp": standup.timestamp if standup else None,
             },
-
             # Channels to check
             "channels_to_check": [
-                {
-                    "channel": ch.channel,
-                    "priority": ch.priority,
-                    "reason": ch.reason,
-                    "client": ch.client
-                }
+                {"channel": ch.channel, "priority": ch.priority, "reason": ch.reason, "client": ch.client}
                 for ch in channel_checklist
             ],
-
             # High priority channels
             "high_priority_channels": [ch.channel for ch in priority_channels],
-
             # Discrepancies
-            "discrepancies": task_data.get("discrepancies", [])
+            "discrepancies": task_data.get("discrepancies", []),
         }
 
         return summary
 
-    def get_priority_tasks(
-        self,
-        name: str,
-        limit: int = 5
-    ) -> List[Dict[str, Any]]:
+    def get_priority_tasks(self, name: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
         Get top priority tasks for a team member.
 
@@ -199,36 +161,37 @@ class DailyAggregator:
         # 1. In-progress tasks first
         for task in self.memory.get_tasks_by_assignee(name, status=TaskStatus.IN_PROGRESS.value):
             if task.task_id not in seen_ids:
-                priority_tasks.append({
-                    "name": task.task_name,
-                    "status": "in_progress",
-                    "reason": "Currently working on",
-                    "priority": task.priority or "medium"
-                })
+                priority_tasks.append(
+                    {
+                        "name": task.task_name,
+                        "status": "in_progress",
+                        "reason": "Currently working on",
+                        "priority": task.priority or "medium",
+                    }
+                )
                 seen_ids.add(task.task_id)
 
         # 2. High priority tasks
         for task in self.memory.get_tasks_by_assignee(name):
             if task.task_id not in seen_ids and task.priority == "high":
                 if task.status != TaskStatus.COMPLETE.value:
-                    priority_tasks.append({
-                        "name": task.task_name,
-                        "status": task.status,
-                        "reason": "High priority",
-                        "priority": "high"
-                    })
+                    priority_tasks.append(
+                        {"name": task.task_name, "status": task.status, "reason": "High priority", "priority": "high"}
+                    )
                     seen_ids.add(task.task_id)
 
         # 3. Tasks due today
         for task in self.memory.get_tasks_by_assignee(name, date=today):
             if task.task_id not in seen_ids:
                 if task.status != TaskStatus.COMPLETE.value:
-                    priority_tasks.append({
-                        "name": task.task_name,
-                        "status": task.status,
-                        "reason": "Due today",
-                        "priority": task.priority or "medium"
-                    })
+                    priority_tasks.append(
+                        {
+                            "name": task.task_name,
+                            "status": task.status,
+                            "reason": "Due today",
+                            "priority": task.priority or "medium",
+                        }
+                    )
                     seen_ids.add(task.task_id)
 
         return priority_tasks[:limit]
@@ -249,16 +212,11 @@ class DailyAggregator:
             date = datetime.now().strftime("%Y-%m-%d")
 
         team_members = self.channels.get_team_members()
-        overview = {
+        overview: Dict[str, Any] = {
             "date": date,
             "generated_at": datetime.now().isoformat(),
             "team_members": {},
-            "totals": {
-                "pending": 0,
-                "in_progress": 0,
-                "completed": 0,
-                "standups_posted": 0
-            }
+            "totals": {"pending": 0, "in_progress": 0, "completed": 0, "standups_posted": 0},
         }
 
         for name in team_members:
@@ -266,7 +224,7 @@ class DailyAggregator:
             overview["team_members"][name] = {
                 "task_counts": summary["task_counts"],
                 "standup_posted": summary["standup"]["posted"],
-                "top_priorities": self.get_priority_tasks(name, limit=3)
+                "top_priorities": self.get_priority_tasks(name, limit=3),
             }
 
             # Update totals
@@ -322,7 +280,7 @@ class DailyAggregator:
             lines.append("")
             lines.append("🔄 In Progress:")
             for task in summary["in_progress_tasks"]:
-                priority = f" [{task['priority']}]" if task.get('priority') else ""
+                priority = f" [{task['priority']}]" if task.get("priority") else ""
                 lines.append(f"   • {task['name']}{priority}")
 
         # Pending tasks
@@ -330,8 +288,8 @@ class DailyAggregator:
             lines.append("")
             lines.append("📌 Pending Tasks:")
             for task in summary["pending_tasks"][:10]:  # Limit to 10
-                priority = f" [{task['priority']}]" if task.get('priority') else ""
-                source = f" ({task['source']})" if task.get('source') else ""
+                priority = f" [{task['priority']}]" if task.get("priority") else ""
+                source = f" ({task['source']})" if task.get("source") else ""
                 lines.append(f"   • {task['name']}{priority}{source}")
             if len(summary["pending_tasks"]) > 10:
                 lines.append(f"   ... and {len(summary['pending_tasks']) - 10} more")
@@ -341,7 +299,7 @@ class DailyAggregator:
             lines.append("")
             lines.append("✅ Completed:")
             for task in summary["completed_tasks"]:
-                confirmed = f" (confirmed by {task['confirmed_by']})" if task.get('confirmed_by') else ""
+                confirmed = f" (confirmed by {task['confirmed_by']})" if task.get("confirmed_by") else ""
                 lines.append(f"   ✓ {task['name']}{confirmed}")
 
         # Channels to check
@@ -349,7 +307,7 @@ class DailyAggregator:
         lines.append("📺 Channels to Check:")
         high_priority = [ch for ch in summary["channels_to_check"] if ch["priority"] == "high"]
         for ch in high_priority[:5]:
-            client = f" - {ch['client']}" if ch.get('client') else ""
+            client = f" - {ch['client']}" if ch.get("client") else ""
             lines.append(f"   🔴 {ch['channel']}{client}")
 
         # Discrepancies
@@ -402,7 +360,9 @@ class DailyAggregator:
             lines.append(f"👤 {name} {standup_icon}")
 
             counts = data["task_counts"]
-            lines.append(f"   Tasks: {counts['pending']} pending | {counts['in_progress']} active | {counts['completed']} done")
+            lines.append(
+                f"   Tasks: {counts['pending']} pending | {counts['in_progress']} active | {counts['completed']} done"
+            )
 
             if data["top_priorities"]:
                 lines.append("   Top priorities:")
@@ -458,14 +418,14 @@ class DailyAggregator:
             "completed_count": len(completed),
             "completed_tasks": completed,
             "pending_for_tomorrow": [
-                t for t in summary["pending_tasks"]
-                if t.get("status") != TaskStatus.COMPLETE.value
+                t for t in summary["pending_tasks"] if t.get("status") != TaskStatus.COMPLETE.value
             ],
-            "in_progress_carryover": summary["in_progress_tasks"]
+            "in_progress_carryover": summary["in_progress_tasks"],
         }
 
 
 # ==================== Convenience Functions ====================
+
 
 def get_aggregator() -> DailyAggregator:
     """Get or create a DailyAggregator instance."""

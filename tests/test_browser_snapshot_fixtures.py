@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.browser import BrowserAutomationConfig, NotionBrowserClient, SlackBrowserClient
-from src.dom_selectors import DOMExtractor, MESSAGE_CONTAINER, MESSAGE_LIST_CONTAINER, THREAD_MESSAGE_CONTAINER
+from src.dom_selectors import MESSAGE_CONTAINER, MESSAGE_LIST_CONTAINER, THREAD_MESSAGE_CONTAINER, DOMExtractor
 
 try:
     from playwright.sync_api import sync_playwright
