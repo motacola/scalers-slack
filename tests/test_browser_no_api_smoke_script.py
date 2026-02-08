@@ -74,10 +74,12 @@ def smoke_harness(monkeypatch):
 
         def __init__(self, _session, _config):
             self.check_calls = 0
+            self.last_checked_page = ""
             self.__class__.instances.append(self)
 
-        def check_page_access(self, _page_id: str) -> bool:
+        def check_page_access(self, page_id: str) -> bool:
             self.check_calls += 1
+            self.last_checked_page = page_id
             return True
 
     def fake_browser_config(_settings: dict):
@@ -88,6 +90,7 @@ def smoke_harness(monkeypatch):
             smart_wait_timeout_ms=15000,
             smart_wait_stability_ms=600,
             max_retries=3,
+            notion_base_url="https://www.notion.so",
         )
 
     monkeypatch.setattr(smoke, "BrowserSession", FakeSession)
@@ -116,6 +119,48 @@ def test_smoke_json_includes_elapsed_fields(smoke_harness, monkeypatch, capsys):
     assert payload["checks"]
     assert all(isinstance(item.get("elapsed_ms"), int) for item in payload["checks"])
     assert fake_sessions.instances and fake_sessions.instances[-1].closed is True
+
+
+def test_smoke_json_writes_metrics_file(smoke_harness, monkeypatch, capsys, tmp_path):
+    metrics_path = tmp_path / "smoke_metrics.jsonl"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "browser_no_api_smoke.py",
+            "--json",
+            "--force-dom",
+            "--skip-thread",
+            "--skip-notion",
+            "--metrics-path",
+            str(metrics_path),
+        ],
+    )
+
+    exit_code = smoke.main()
+    payload = json.loads(capsys.readouterr().out)
+    lines = metrics_path.read_text(encoding="utf-8").strip().splitlines()
+    metrics_record = json.loads(lines[-1])
+
+    assert exit_code == 0
+    assert payload["metrics_path"] == str(metrics_path)
+    assert metrics_record["ok"] is True
+    assert isinstance(metrics_record["elapsed_ms"], int)
+    assert metrics_record["checks"]
+
+
+def test_smoke_without_notion_page_checks_base_url(smoke_harness, monkeypatch, capsys):
+    _, _, fake_notion = smoke_harness
+    monkeypatch.setattr(sys, "argv", ["browser_no_api_smoke.py", "--json", "--skip-thread"])
+
+    exit_code = smoke.main()
+    payload = json.loads(capsys.readouterr().out)
+    notion_check = next(item for item in payload["checks"] if item["name"] == "Notion page access")
+
+    assert exit_code == 0
+    assert notion_check["detail"] == "base=https://www.notion.so"
+    assert fake_notion.instances and fake_notion.instances[-1].check_calls == 1
+    assert fake_notion.instances[-1].last_checked_page == "https://www.notion.so"
 
 
 def test_smoke_force_dom_uses_history_derived_thread_check(smoke_harness, monkeypatch, capsys):

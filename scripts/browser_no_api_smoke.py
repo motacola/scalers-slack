@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +51,18 @@ def _normalize_ts_text(value: Any) -> str:
     return text
 
 
+def _write_metrics(path: str, payload: dict[str, Any]) -> None:
+    try:
+        target = Path(path)
+        if target.parent:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload) + "\n")
+    except Exception:
+        # Metrics persistence is best-effort and should not fail the smoke run.
+        pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Browser-only smoke checks (no API keys required).")
     parser.add_argument("--config", default="config/config.json", help="Path to config.json")
@@ -90,6 +103,12 @@ def main() -> int:
         default=1,
         help="Browser action retry attempts during smoke checks",
     )
+    parser.add_argument(
+        "--metrics-path",
+        default="output/smoke/browser_no_api_metrics.jsonl",
+        help="Path to append JSONL smoke run metrics",
+    )
+    parser.add_argument("--no-metrics", action="store_true", help="Disable writing metrics to disk")
     parser.add_argument("--json", action="store_true", help="Print JSON output")
     args = parser.parse_args()
 
@@ -284,19 +303,58 @@ def main() -> int:
                     elapsed_ms=int((time.perf_counter() - check_start) * 1000),
                 )
         else:
-            add_check(
-                "Notion page access",
-                True,
-                "skipped (no Notion page configured)",
-                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
-            )
+            notion_base = str(getattr(browser_config, "notion_base_url", "") or "https://www.notion.so")
+            try:
+                accessible = notion.check_page_access(notion_base)
+                add_check(
+                    "Notion page access",
+                    accessible,
+                    f"base={notion_base}",
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+                )
+            except Exception as exc:
+                add_check(
+                    "Notion page access",
+                    False,
+                    str(exc),
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+                )
     finally:
         session.close()
 
     elapsed_ms = int((time.perf_counter() - run_start) * 1000)
+    metrics_written = not bool(args.no_metrics)
+    if metrics_written:
+        _write_metrics(
+            str(args.metrics_path),
+            {
+                "ts_epoch": time.time(),
+                "ts_utc": datetime.now(timezone.utc).isoformat(),
+                "ok": overall_ok,
+                "elapsed_ms": elapsed_ms,
+                "checks": [
+                    {
+                        "name": check.get("name"),
+                        "ok": bool(check.get("ok")),
+                        "elapsed_ms": int(check.get("elapsed_ms", 0) or 0),
+                        "detail": str(check.get("detail") or ""),
+                    }
+                    for check in checks
+                ],
+                "flags": {
+                    "force_dom": bool(args.force_dom),
+                    "strict_thread": bool(args.strict_thread),
+                    "skip_thread": bool(args.skip_thread),
+                    "skip_notion": bool(args.skip_notion),
+                },
+            },
+        )
 
     if args.json:
-        print(json.dumps({"ok": overall_ok, "elapsed_ms": elapsed_ms, "checks": checks}, indent=2))
+        payload: dict[str, Any] = {"ok": overall_ok, "elapsed_ms": elapsed_ms, "checks": checks}
+        if metrics_written:
+            payload["metrics_path"] = str(args.metrics_path)
+        print(json.dumps(payload, indent=2))
     else:
         for check in checks:
             print(

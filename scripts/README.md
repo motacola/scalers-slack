@@ -52,12 +52,15 @@ python3 scripts/browser_no_api_smoke.py --force-dom --interactive-timeout-ms 700
 
 # Force full thread-pane extraction (slower, but stricter)
 python3 scripts/browser_no_api_smoke.py --force-dom --strict-thread
+
+# Persist metrics to a custom JSONL file
+python3 scripts/browser_no_api_smoke.py --force-dom --metrics-path output/smoke/custom_metrics.jsonl
 ```
 
 **Checks:**
 - Slack auth fallback (`auth_test`)
 - Conversations/history/thread extraction via browser DOM
-- Notion page access with browser session
+- Notion page access with browser session (or Notion base URL when no page is configured)
 - Per-check timing in text output and JSON `elapsed_ms` fields
 
 ---
