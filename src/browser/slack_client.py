@@ -9,26 +9,27 @@ from datetime import datetime
 from typing import Any, cast
 from urllib.parse import urlencode, urljoin
 
-from .base import (
-    BaseBrowserClient,
-    BrowserAutomationConfig,
-    BrowserSession,
-    SessionExpiredError,
-)
 from ..dom_selectors import (
     CHANNEL_HEADER_NAME,
     CHANNEL_SIDEBAR,
     CHANNEL_TOPIC,
-    DOMExtractor,
     MESSAGE_CONTAINER,
     MESSAGE_LIST_CONTAINER,
     SEARCH_RESULT,
     THREAD_MESSAGE_CONTAINER,
     THREAD_PANE_CONTAINER,
     THREAD_REPLIES,
+    DOMExtractor,
+)
+from .base import (
+    BaseBrowserClient,
+    BrowserAutomationConfig,
+    BrowserSession,
+    SessionExpiredError,
 )
 
 logger = logging.getLogger(__name__)
+
 
 class SlackBrowserClient(BaseBrowserClient):
     def __init__(self, session: BrowserSession, config: BrowserAutomationConfig):
@@ -195,7 +196,9 @@ class SlackBrowserClient(BaseBrowserClient):
                         continue
                     candidate_ts = self._normalize_ts(data.get("ts"))
                     if not candidate_ts:
-                        candidate_ts = self._normalize_ts(self._parse_ts_from_permalink(str(data.get("permalink") or "")))
+                        candidate_ts = self._normalize_ts(
+                            self._parse_ts_from_permalink(str(data.get("permalink") or ""))
+                        )
                     if candidate_ts == thread_ts:
                         return message
             except Exception:
@@ -281,7 +284,17 @@ class SlackBrowserClient(BaseBrowserClient):
         require_text = thread_ts is None
         for selector in selector_set:
             try:
-                elements = (scope.locator(selector) if scope is not None else page.locator(selector)).all()
+                elements = []
+                if scope is not None:
+                    elements = scope.locator(selector).all()
+                    if not elements and " " in selector:
+                        nested_selector = selector.split(" ", 1)[1].strip()
+                        if nested_selector:
+                            elements = scope.locator(nested_selector).all()
+                    if not elements:
+                        elements = page.locator(selector).all()
+                else:
+                    elements = page.locator(selector).all()
             except Exception:
                 continue
             for element in elements:
@@ -298,8 +311,10 @@ class SlackBrowserClient(BaseBrowserClient):
                 )
                 if not api_message:
                     continue
-                key = api_message.get("ts") or api_message.get("permalink") or (
-                    f"{api_message.get('user')}::{api_message.get('text')}"
+                key = (
+                    api_message.get("ts")
+                    or api_message.get("permalink")
+                    or (f"{api_message.get('user')}::{api_message.get('text')}")
                 )
                 if key in seen:
                     continue
@@ -360,10 +375,7 @@ class SlackBrowserClient(BaseBrowserClient):
                 scrolls = 0
                 stagnant_rounds = 0
                 while (
-                    len(messages) < limit
-                    and thread_scope is not None
-                    and scrolls < max_scrolls
-                    and stagnant_rounds < 3
+                    len(messages) < limit and thread_scope is not None and scrolls < max_scrolls and stagnant_rounds < 3
                 ):
                     before = len(messages)
                     try:
@@ -447,7 +459,7 @@ class SlackBrowserClient(BaseBrowserClient):
                 if not self.config.interactive_login or self.config.headless:
                     raise SessionExpiredError("Slack login required. Please refresh storage state.")
                 logger.info("Slack login required. Waiting for manual login...")
-            
+
             # Check for Slack specific elements
             if page.query_selector("[data-qa='channel_sidebar_name'], .p-client_container, .c-message_list"):
                 if self._has_web_token(page) and self.config.auto_save_storage_state:
@@ -562,7 +574,9 @@ class SlackBrowserClient(BaseBrowserClient):
             container = extractor.scroll_container()
             scrolls = 0
             stagnant_rounds = 0
-            while len(messages) < limit and container is not None and scrolls < effective_scrolls and stagnant_rounds < 3:
+            while (
+                len(messages) < limit and container is not None and scrolls < effective_scrolls and stagnant_rounds < 3
+            ):
                 before_count = len(messages)
                 before_top = None
                 try:
@@ -744,10 +758,10 @@ class SlackBrowserClient(BaseBrowserClient):
                         time.sleep(sleep_s)
                         continue
                     raise RuntimeError("Slack API rate limit exceeded (browser)")
-                
+
                 if self._is_auth_error(status, data):
                     raise SessionExpiredError(f"Slack auth error (browser): {status}")
-                
+
                 if not (200 <= status < 300):
                     error = data.get("error") if isinstance(data, dict) else "unknown_error"
                     logger.error(f"Slack API error (browser): {status} {error}")
@@ -835,7 +849,7 @@ class SlackBrowserClient(BaseBrowserClient):
                     return token
                 try:
                     token = page.evaluate(
-                    """
+                        """
                     (workspaceId) => {
                         const keys = ["localConfig_v2", "localConfig"];
                         for (const key of keys) {
@@ -859,8 +873,8 @@ class SlackBrowserClient(BaseBrowserClient):
                         return null;
                     }
                     """,
-                    workspace_id or None,
-                )
+                        workspace_id or None,
+                    )
                     if token:
                         return token
                 except Exception:
@@ -1203,13 +1217,15 @@ class SlackBrowserClient(BaseBrowserClient):
 
     def reset_stats(self) -> None:
         super().reset_stats()
-        self.stats.update({
-            "api_calls": 0,
-            "retries": 0,
-            "rate_limit_hits": 0,
-            "rate_limit_sleep_s": 0.0,
-            "retry_sleep_s": 0.0,
-        })
+        self.stats.update(
+            {
+                "api_calls": 0,
+                "retries": 0,
+                "rate_limit_hits": 0,
+                "rate_limit_sleep_s": 0.0,
+                "retry_sleep_s": 0.0,
+            }
+        )
         self.pagination_stats = {}
 
     def get_stats(self) -> dict[str, Any]:
