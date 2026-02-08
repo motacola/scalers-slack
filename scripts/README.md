@@ -65,6 +65,27 @@ python3 scripts/browser_no_api_smoke.py --force-dom --metrics-path output/smoke/
 
 ---
 
+#### `smoke_metrics_report.py` ⭐ **Smoke trend report**
+Summarize browser smoke metrics history with p50/p95 timings, failure rates, and last regression detection.
+
+```bash
+# Human-readable summary
+python3 scripts/smoke_metrics_report.py
+
+# JSON output for automation
+python3 scripts/smoke_metrics_report.py --json
+
+# Analyze only the latest 50 runs from the last 24 hours
+python3 scripts/smoke_metrics_report.py --limit 50 --since-hours 24
+```
+
+**Outputs:**
+- Overall runs/failure rate with p50/p95 elapsed time
+- Per-check p50/p95 and failure rate
+- Last detected regression (`latency_spike` or `new_failure`)
+
+---
+
 #### `browser_health_check.py`
 Test browser automation setup and connectivity.
 

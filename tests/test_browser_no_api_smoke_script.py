@@ -106,7 +106,7 @@ def test_smoke_json_includes_elapsed_fields(smoke_harness, monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["browser_no_api_smoke.py", "--json", "--force-dom", "--skip-thread", "--skip-notion"],
+        ["browser_no_api_smoke.py", "--json", "--force-dom", "--skip-thread", "--skip-notion", "--no-metrics"],
     )
 
     exit_code = smoke.main()
@@ -151,7 +151,7 @@ def test_smoke_json_writes_metrics_file(smoke_harness, monkeypatch, capsys, tmp_
 
 def test_smoke_without_notion_page_checks_base_url(smoke_harness, monkeypatch, capsys):
     _, _, fake_notion = smoke_harness
-    monkeypatch.setattr(sys, "argv", ["browser_no_api_smoke.py", "--json", "--skip-thread"])
+    monkeypatch.setattr(sys, "argv", ["browser_no_api_smoke.py", "--json", "--skip-thread", "--no-metrics"])
 
     exit_code = smoke.main()
     payload = json.loads(capsys.readouterr().out)
@@ -165,7 +165,11 @@ def test_smoke_without_notion_page_checks_base_url(smoke_harness, monkeypatch, c
 
 def test_smoke_force_dom_uses_history_derived_thread_check(smoke_harness, monkeypatch, capsys):
     _, fake_slack, _ = smoke_harness
-    monkeypatch.setattr(sys, "argv", ["browser_no_api_smoke.py", "--json", "--force-dom", "--skip-notion"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["browser_no_api_smoke.py", "--json", "--force-dom", "--skip-notion", "--no-metrics"],
+    )
 
     exit_code = smoke.main()
     payload = json.loads(capsys.readouterr().out)
@@ -182,7 +186,7 @@ def test_smoke_force_dom_strict_thread_uses_thread_fetch(smoke_harness, monkeypa
     monkeypatch.setattr(
         sys,
         "argv",
-        ["browser_no_api_smoke.py", "--json", "--force-dom", "--strict-thread", "--skip-notion"],
+        ["browser_no_api_smoke.py", "--json", "--force-dom", "--strict-thread", "--skip-notion", "--no-metrics"],
     )
 
     exit_code = smoke.main()
