@@ -36,6 +36,18 @@ def _status_line(name: str, ok: bool, detail: str) -> str:
     return f"[{'OK' if ok else 'FAIL'}] {name}: {detail}"
 
 
+def _normalize_ts_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if "." in text:
+        whole, frac = text.split(".", 1)
+        return f"{whole}.{frac[:6].ljust(6, '0')}"
+    if text.isdigit():
+        return f"{text}.000000"
+    return text
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Browser-only smoke checks (no API keys required).")
     parser.add_argument("--config", default="config/config.json", help="Path to config.json")
@@ -45,6 +57,37 @@ def main() -> int:
     parser.add_argument("--history-limit", type=int, default=20, help="Messages to fetch from channel history")
     parser.add_argument("--reply-limit", type=int, default=30, help="Replies to fetch from thread")
     parser.add_argument("--force-dom", action="store_true", help="Force DOM fallback by disabling Slack API calls")
+    parser.add_argument("--skip-thread", action="store_true", help="Skip Slack thread reply check")
+    parser.add_argument("--skip-notion", action="store_true", help="Skip Notion page access check")
+    parser.add_argument(
+        "--strict-thread",
+        action="store_true",
+        help="Use full thread pane extraction (default force-dom mode uses a faster history-derived check)",
+    )
+    parser.add_argument(
+        "--interactive-timeout-ms",
+        type=int,
+        default=20000,
+        help="Per-page readiness timeout in milliseconds (lower is faster for smoke runs)",
+    )
+    parser.add_argument(
+        "--page-timeout-ms",
+        type=int,
+        default=15000,
+        help="Navigation/action timeout in milliseconds",
+    )
+    parser.add_argument(
+        "--smart-wait-timeout-ms",
+        type=int,
+        default=8000,
+        help="Network-idle smart-wait timeout in milliseconds",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=1,
+        help="Browser action retry attempts during smoke checks",
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON output")
     args = parser.parse_args()
 
@@ -52,6 +95,12 @@ def main() -> int:
     browser_settings = config.get("settings", {}).get("browser_automation", {})
     browser_config = _build_browser_config(browser_settings)
     browser_config.enabled = True
+    interactive_timeout_ms = max(1000, int(args.interactive_timeout_ms))
+    browser_config.interactive_login_timeout_ms = interactive_timeout_ms
+    browser_config.timeout_ms = max(3000, int(args.page_timeout_ms))
+    browser_config.smart_wait_timeout_ms = max(1000, int(args.smart_wait_timeout_ms))
+    browser_config.smart_wait_stability_ms = min(int(browser_config.smart_wait_stability_ms or 600), 350)
+    browser_config.max_retries = max(1, int(args.max_retries))
 
     session = BrowserSession(browser_config)
     slack = SlackBrowserClient(session, browser_config)
@@ -116,18 +165,33 @@ def main() -> int:
             add_check("Slack history", True, "skipped (no channel configured)")
 
         thread_ts = args.thread_ts or _pick_thread_ts(history)
-        if channel_id and thread_ts:
+        if args.skip_thread:
+            add_check("Slack thread replies", True, "skipped (--skip-thread)")
+        elif channel_id and thread_ts:
             try:
-                replies = slack.fetch_thread_replies_paginated(
-                    channel_id,
-                    thread_ts=thread_ts,
-                    limit=max(1, args.reply_limit),
-                    max_pages=1,
-                )
+                if args.force_dom and not args.strict_thread and history:
+                    target_thread = _normalize_ts_text(thread_ts)
+                    replies = [
+                        message
+                        for message in history
+                        if (
+                            _normalize_ts_text(message.get("thread_ts")) == target_thread
+                            or _normalize_ts_text(message.get("ts")) == target_thread
+                        )
+                    ]
+                    detail = f"thread_ts={thread_ts} count={len(replies)} (history-derived)"
+                else:
+                    replies = slack.fetch_thread_replies_paginated(
+                        channel_id,
+                        thread_ts=thread_ts,
+                        limit=max(1, args.reply_limit),
+                        max_pages=1,
+                    )
+                    detail = f"thread_ts={thread_ts} count={len(replies)}"
                 add_check(
                     "Slack thread replies",
                     len(replies) > 0,
-                    f"thread_ts={thread_ts} count={len(replies)}",
+                    detail,
                     extra={"pagination": slack.get_pagination_stats()},
                 )
             except Exception as exc:
@@ -136,7 +200,9 @@ def main() -> int:
             add_check("Slack thread replies", True, "skipped (no thread available)")
 
         notion_page = args.notion_page or _pick_notion_page_id(config)
-        if notion_page:
+        if args.skip_notion:
+            add_check("Notion page access", True, "skipped (--skip-notion)")
+        elif notion_page:
             try:
                 accessible = notion.check_page_access(notion_page)
                 add_check("Notion page access", accessible, f"page={notion_page}")

@@ -43,6 +43,15 @@ python3 scripts/browser_no_api_smoke.py --force-dom
 
 # JSON output for CI/logging
 python3 scripts/browser_no_api_smoke.py --force-dom --json
+
+# Faster Slack-only smoke run (skip Notion/thread checks)
+python3 scripts/browser_no_api_smoke.py --force-dom --skip-thread --skip-notion
+
+# Tune runtime ceilings when sessions are slow
+python3 scripts/browser_no_api_smoke.py --force-dom --interactive-timeout-ms 7000 --page-timeout-ms 12000 --smart-wait-timeout-ms 6000
+
+# Force full thread-pane extraction (slower, but stricter)
+python3 scripts/browser_no_api_smoke.py --force-dom --strict-thread
 ```
 
 **Checks:**

@@ -419,8 +419,40 @@ def test_thread_url_candidates_include_channel_base(mock_browser_session, browse
     candidates = slack_client._thread_url_candidates("C12345678", "1700000000.000001")
 
     assert candidates
-    assert candidates[0].endswith("/T123456/C12345678")
+    assert any(candidate.endswith("/T123456/C12345678") for candidate in candidates)
+    assert candidates[-1].endswith("/T123456/C12345678")
     assert any("thread_ts=1700000000.000001" in candidate for candidate in candidates)
+
+
+def test_fetch_thread_replies_dom_skips_failed_candidate_navigation(mock_browser_session, browser_config):
+    """Thread DOM extraction should continue when one candidate URL fails to open."""
+    slack_client = SlackBrowserClient(mock_browser_session, browser_config)
+    page = MagicMock()
+    thread_url = "https://app.slack.com/client/T123456/C12345678?thread_ts=1700000000.000001&cid=C12345678"
+    channel_url = "https://app.slack.com/client/T123456/C12345678"
+
+    def _new_page(url: str):
+        if "thread_ts=" in url:
+            raise RuntimeError("Page.goto: Timeout 12000ms exceeded")
+        return page
+
+    with (
+        patch.object(slack_client.session, "new_page", side_effect=_new_page) as new_page,
+        patch.object(slack_client, "_wait_until_ready"),
+        patch.object(slack_client, "_thread_url_candidates", return_value=[thread_url, channel_url]),
+        patch.object(slack_client, "_thread_pane_scope", return_value=None),
+        patch.object(slack_client, "_open_thread_from_root_message", return_value=False),
+        patch.object(slack_client, "_collect_messages_from_scope", return_value=0),
+        patch("src.browser.slack_client.DOMExtractor") as extractor_cls,
+    ):
+        extractor = MagicMock()
+        extractor.wait_for_element.return_value = True
+        extractor_cls.return_value = extractor
+
+        messages = slack_client._fetch_thread_replies_dom("C12345678", "1700000000.000001", limit=5)
+
+    assert messages == []
+    assert new_page.call_count == 2
 
 
 def test_fetch_thread_replies_dom_attempts_root_click_open(mock_browser_session, browser_config):

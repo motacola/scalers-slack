@@ -166,13 +166,11 @@ class SlackBrowserClient(BaseBrowserClient):
 
     def _thread_url_candidates(self, channel_id: str, thread_ts: str) -> list[str]:
         normalized = self._normalize_ts(thread_ts) or thread_ts
-        compact_ts = normalized.replace(".", "")
         channel_url = self._channel_url(channel_id)
         candidates = [
-            channel_url,
             f"{channel_url}?thread_ts={normalized}&cid={channel_id}",
             f"{channel_url}/thread/{channel_id}-{normalized}",
-            f"{channel_url}/thread/{channel_id}-{compact_ts}",
+            channel_url,
         ]
         seen: set[str] = set()
         ordered: list[str] = []
@@ -238,7 +236,7 @@ class SlackBrowserClient(BaseBrowserClient):
         page,
         channel_id: str,
         thread_ts: str,
-        max_scrolls: int = 16,
+        max_scrolls: int = 8,
     ) -> bool:
         normalized_thread_ts = self._normalize_ts(thread_ts)
         if not normalized_thread_ts:
@@ -338,7 +336,7 @@ class SlackBrowserClient(BaseBrowserClient):
         channel_id: str,
         thread_ts: str,
         limit: int = 200,
-        max_scrolls: int = 8,
+        max_scrolls: int = 4,
     ) -> list[dict[str, Any]]:
         normalized_thread_ts = self._normalize_ts(thread_ts)
         if not normalized_thread_ts:
@@ -347,14 +345,21 @@ class SlackBrowserClient(BaseBrowserClient):
         messages: list[dict[str, Any]] = []
         seen: set[str] = set()
         total_pages = 0
+        channel_url = self._channel_url(channel_id)
 
         for url in self._thread_url_candidates(channel_id, normalized_thread_ts):
-            page = self.session.new_page(url)
+            page = None
+            try:
+                page = self.session.new_page(url)
+            except Exception as exc:
+                logger.warning("Failed to open thread candidate URL %s: %s", url, exc)
+                continue
+
             try:
                 self._wait_until_ready(page)
                 extractor = DOMExtractor(page)
                 thread_scope = self._thread_pane_scope(page, timeout=2500)
-                if thread_scope is None:
+                if thread_scope is None and url == channel_url:
                     self._open_thread_from_root_message(page, channel_id=channel_id, thread_ts=normalized_thread_ts)
                     thread_scope = self._thread_pane_scope(page, timeout=2500)
                 if thread_scope is None:
@@ -407,10 +412,11 @@ class SlackBrowserClient(BaseBrowserClient):
                     total_pages = max(1, scrolls + 1)
                     break
             finally:
-                try:
-                    page.close()
-                except Exception:
-                    pass
+                if page is not None:
+                    try:
+                        page.close()
+                    except Exception:
+                        pass
 
         sorted_messages = self._sort_messages_asc(messages)
         self._set_pagination_stats("thread_dom", max(1, total_pages), len(sorted_messages))
@@ -1165,15 +1171,53 @@ class SlackBrowserClient(BaseBrowserClient):
         try:
             self._wait_until_ready(page)
             DOMExtractor(page).wait_for_element(CHANNEL_SIDEBAR, timeout=10000)
-            for anchor in page.locator("a[href*='/client/']").all():
+            channel_id_pattern = re.compile(r"[CGD][A-Z0-9]{8,}")
+
+            try:
+                # Newer Slack UI renders sidebar entries as virtualized treeitems rather than anchor links.
+                dom_items = page.evaluate(
+                    """
+                    (maxItems) => {
+                        const rows = [];
+                        const nodes = document.querySelectorAll("[data-qa^='channel_sidebar_name_']");
+                        for (const node of nodes) {
+                            const rawName = (node.textContent || "").trim().replace(/\\s+/g, " ");
+                            if (!rawName) continue;
+                            const treeItem = node.closest("[role='treeitem']");
+                            const parentLink = node.closest(
+                                "[data-sidebar-link-id], [data-qa-channel-sidebar-link-id], a[href]"
+                            );
+                            const rawId =
+                                treeItem?.getAttribute("data-item-key") ||
+                                treeItem?.id ||
+                                parentLink?.getAttribute("data-sidebar-link-id") ||
+                                parentLink?.getAttribute("data-qa-channel-sidebar-link-id") ||
+                                parentLink?.getAttribute("href") ||
+                                "";
+                            rows.push({ name: rawName, channel_id: rawId });
+                            if (rows.length >= maxItems) break;
+                        }
+                        return rows;
+                    }
+                    """,
+                    max(limit * 3, limit),
+                )
+            except Exception:
+                dom_items = []
+
+            for item in dom_items:
                 if len(results) >= limit:
                     break
                 try:
-                    href = anchor.get_attribute("href") or ""
-                    channel_id = self._parse_channel_id_from_text(href)
+                    raw_candidate = str(item.get("channel_id") or "").strip()
+                    channel_id = raw_candidate if channel_id_pattern.fullmatch(raw_candidate) else None
+                    if not channel_id and raw_candidate:
+                        channel_id = self._parse_channel_id_from_text(raw_candidate)
                     if not channel_id or channel_id in seen_ids:
                         continue
-                    name = (anchor.inner_text() or "").strip().split("\n")[0].strip()
+                    if not channel_id_pattern.fullmatch(channel_id):
+                        continue
+                    name = str(item.get("name") or "").strip()
                     if not name:
                         name = channel_id
                     seen_ids.add(channel_id)
@@ -1187,6 +1231,33 @@ class SlackBrowserClient(BaseBrowserClient):
                     )
                 except Exception:
                     continue
+
+            # Legacy fallback path for older Slack layouts that still expose channel anchors.
+            if len(results) < limit:
+                for anchor in page.locator("a[href*='/client/'], a[href*='/archives/']").all():
+                    if len(results) >= limit:
+                        break
+                    try:
+                        href = anchor.get_attribute("href") or ""
+                        channel_id = self._parse_channel_id_from_text(href)
+                        if not channel_id or channel_id in seen_ids:
+                            continue
+                        if not channel_id_pattern.fullmatch(channel_id):
+                            continue
+                        name = (anchor.inner_text() or "").strip().split("\n")[0].strip()
+                        if not name:
+                            name = channel_id
+                        seen_ids.add(channel_id)
+                        results.append(
+                            {
+                                "id": channel_id,
+                                "name": name,
+                                "name_normalized": name.lower().replace(" ", "-"),
+                                "is_archived": False,
+                            }
+                        )
+                    except Exception:
+                        continue
             self._set_pagination_stats("conversations_dom", 1, len(results))
             return results
         finally:

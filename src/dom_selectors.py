@@ -87,8 +87,10 @@ USER_AVATAR = SelectorSet(
 
 # Channel sidebar
 CHANNEL_SIDEBAR = SelectorSet(
-    primary='[data-qa="channel_sidebar"]',
+    primary='[data-qa="channel-sidebar"]',
     fallbacks=[
+        '[data-qa="channel_sidebar"]',
+        '[data-qa-channel-sidebar="true"]',
         ".p-workspace__sidebar",
         ".p-channel_sidebar",
         '[role="navigation"]',
