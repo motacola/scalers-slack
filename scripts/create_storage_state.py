@@ -94,8 +94,7 @@ def main() -> int:
         "--user-data-dir",
         default="",
         help=(
-            "Chrome user data dir for persistent context "
-            "(recommended to match config.browser_automation.user_data_dir)"
+            "Chrome user data dir for persistent context (recommended to match config.browser_automation.user_data_dir)"
         ),
     )
     parser.add_argument(

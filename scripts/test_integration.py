@@ -37,6 +37,7 @@ def test_task_memory():
         tasks = memory.get_tasks_by_assignee(member)
         print(f"\n   📌 {member}: {len(tasks)} tasks")
 
+
 def test_channel_manager():
     """Test ChannelManager functionality."""
     print("\n" + "=" * 60)
@@ -74,6 +75,7 @@ def test_channel_manager():
         status = "✓" if expected in types else "✗"
         print(f"      {status} '{msg[:30]}...' -> {types}")
 
+
 def test_daily_aggregator():
     """Test DailyAggregator functionality."""
     print("\n" + "=" * 60)
@@ -100,6 +102,7 @@ def test_daily_aggregator():
         for action in actions[:3]:
             print(f"      • {action}")
 
+
 def test_formatted_reports():
     """Test formatted report generation."""
     print("\n" + "=" * 60)
@@ -118,6 +121,7 @@ def test_formatted_reports():
         print(line)
     if len(lines) > 25:
         print(f"   ... ({len(lines) - 25} more lines)")
+
 
 def main():
     """Run all integration tests."""
