@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -32,8 +33,9 @@ def _pick_thread_ts(history: list[dict[str, Any]]) -> str | None:
     return None
 
 
-def _status_line(name: str, ok: bool, detail: str) -> str:
-    return f"[{'OK' if ok else 'FAIL'}] {name}: {detail}"
+def _status_line(name: str, ok: bool, detail: str, elapsed_ms: int | None = None) -> str:
+    timing = f" ({elapsed_ms}ms)" if isinstance(elapsed_ms, int) else ""
+    return f"[{'OK' if ok else 'FAIL'}]{timing} {name}: {detail}"
 
 
 def _normalize_ts_text(value: Any) -> str:
@@ -109,14 +111,24 @@ def main() -> int:
     checks: list[dict[str, Any]] = []
     overall_ok = True
 
-    def add_check(name: str, ok: bool, detail: str, extra: dict[str, Any] | None = None) -> None:
+    def add_check(
+        name: str,
+        ok: bool,
+        detail: str,
+        extra: dict[str, Any] | None = None,
+        elapsed_ms: int | None = None,
+    ) -> None:
         nonlocal overall_ok
         if not ok:
             overall_ok = False
         record = {"name": name, "ok": ok, "detail": detail}
+        if isinstance(elapsed_ms, int):
+            record["elapsed_ms"] = max(0, elapsed_ms)
         if extra:
             record["extra"] = extra
         checks.append(record)
+
+    run_start = time.perf_counter()
 
     try:
         session.start()
@@ -128,13 +140,25 @@ def main() -> int:
 
             slack._slack_api_call = _disabled_api  # type: ignore[method-assign]
 
+        check_start = time.perf_counter()
         try:
             auth = slack.auth_test()
             team_id = auth.get("team_id") or auth.get("team") or "unknown"
-            add_check("Slack auth", bool(auth.get("ok", True)), f"team={team_id}")
+            add_check(
+                "Slack auth",
+                bool(auth.get("ok", True)),
+                f"team={team_id}",
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
         except Exception as exc:
-            add_check("Slack auth", False, str(exc))
+            add_check(
+                "Slack auth",
+                False,
+                str(exc),
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
 
+        check_start = time.perf_counter()
         try:
             conversations = slack.list_conversations_paginated(limit=20, max_pages=1)
             add_check(
@@ -142,12 +166,19 @@ def main() -> int:
                 len(conversations) > 0,
                 f"count={len(conversations)}",
                 extra={"pagination": slack.get_pagination_stats()},
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
             )
         except Exception as exc:
-            add_check("Slack conversations", False, str(exc))
+            add_check(
+                "Slack conversations",
+                False,
+                str(exc),
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
 
         channel_id = args.channel_id or _pick_channel_id(config)
         history: list[dict[str, Any]] = []
+        check_start = time.perf_counter()
         if channel_id:
             try:
                 history = slack.fetch_channel_history_paginated(
@@ -158,15 +189,32 @@ def main() -> int:
                     len(history) > 0,
                     f"channel={channel_id} count={len(history)}",
                     extra={"pagination": slack.get_pagination_stats()},
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
                 )
             except Exception as exc:
-                add_check("Slack history", False, str(exc))
+                add_check(
+                    "Slack history",
+                    False,
+                    str(exc),
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+                )
         else:
-            add_check("Slack history", True, "skipped (no channel configured)")
+            add_check(
+                "Slack history",
+                True,
+                "skipped (no channel configured)",
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
 
         thread_ts = args.thread_ts or _pick_thread_ts(history)
+        check_start = time.perf_counter()
         if args.skip_thread:
-            add_check("Slack thread replies", True, "skipped (--skip-thread)")
+            add_check(
+                "Slack thread replies",
+                True,
+                "skipped (--skip-thread)",
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
         elif channel_id and thread_ts:
             try:
                 if args.force_dom and not args.strict_thread and history:
@@ -193,31 +241,72 @@ def main() -> int:
                     len(replies) > 0,
                     detail,
                     extra={"pagination": slack.get_pagination_stats()},
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
                 )
             except Exception as exc:
-                add_check("Slack thread replies", False, str(exc))
+                add_check(
+                    "Slack thread replies",
+                    False,
+                    str(exc),
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+                )
         else:
-            add_check("Slack thread replies", True, "skipped (no thread available)")
+            add_check(
+                "Slack thread replies",
+                True,
+                "skipped (no thread available)",
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
 
         notion_page = args.notion_page or _pick_notion_page_id(config)
+        check_start = time.perf_counter()
         if args.skip_notion:
-            add_check("Notion page access", True, "skipped (--skip-notion)")
+            add_check(
+                "Notion page access",
+                True,
+                "skipped (--skip-notion)",
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
         elif notion_page:
             try:
                 accessible = notion.check_page_access(notion_page)
-                add_check("Notion page access", accessible, f"page={notion_page}")
+                add_check(
+                    "Notion page access",
+                    accessible,
+                    f"page={notion_page}",
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+                )
             except Exception as exc:
-                add_check("Notion page access", False, str(exc))
+                add_check(
+                    "Notion page access",
+                    False,
+                    str(exc),
+                    elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+                )
         else:
-            add_check("Notion page access", True, "skipped (no Notion page configured)")
+            add_check(
+                "Notion page access",
+                True,
+                "skipped (no Notion page configured)",
+                elapsed_ms=int((time.perf_counter() - check_start) * 1000),
+            )
     finally:
         session.close()
 
+    elapsed_ms = int((time.perf_counter() - run_start) * 1000)
+
     if args.json:
-        print(json.dumps({"ok": overall_ok, "checks": checks}, indent=2))
+        print(json.dumps({"ok": overall_ok, "elapsed_ms": elapsed_ms, "checks": checks}, indent=2))
     else:
         for check in checks:
-            print(_status_line(check["name"], bool(check["ok"]), str(check["detail"])))
+            print(
+                _status_line(
+                    check["name"],
+                    bool(check["ok"]),
+                    str(check["detail"]),
+                    check.get("elapsed_ms"),
+                )
+            )
             if isinstance(check.get("extra"), dict):
                 print(f"      {json.dumps(check['extra'])}")
 

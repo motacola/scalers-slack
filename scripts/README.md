@@ -58,6 +58,7 @@ python3 scripts/browser_no_api_smoke.py --force-dom --strict-thread
 - Slack auth fallback (`auth_test`)
 - Conversations/history/thread extraction via browser DOM
 - Notion page access with browser session
+- Per-check timing in text output and JSON `elapsed_ms` fields
 
 ---
 
