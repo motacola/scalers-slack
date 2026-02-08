@@ -36,7 +36,9 @@ def test_get_channels_for_member_respects_include_shared(tmp_path):
 
     manager = ChannelManager(str(config_path))
 
-    with_shared = [c.channel for c in manager.get_channels_for_member("Alice", include_shared=True, include_always_check=False)]
+    with_shared = [
+        c.channel for c in manager.get_channels_for_member("Alice", include_shared=True, include_always_check=False)
+    ]
     without_shared = [
         c.channel for c in manager.get_channels_for_member("Alice", include_shared=False, include_always_check=False)
     ]

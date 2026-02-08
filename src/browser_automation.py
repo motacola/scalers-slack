@@ -2,19 +2,21 @@
 DEPRECATED: Use src.browser package instead.
 This module is kept for backward compatibility and redirects to the new modular structure.
 """
+
 import logging
+
 from .browser import (
     BrowserAutomationConfig,
     BrowserSession,
+    BugHerdBrowserClient,
     LoadBalancer,
+    NotionBrowserClient,
     PerformanceMonitor,
     RecoveryManager,
     ScalabilityManager,
-    sync_playwright,
-    BugHerdBrowserClient,
-    SlackNotionCrossReferencer,
-    NotionBrowserClient,
     SlackBrowserClient,
+    SlackNotionCrossReferencer,
+    sync_playwright,
 )
 
 logger = logging.getLogger(__name__)

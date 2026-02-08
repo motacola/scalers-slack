@@ -113,10 +113,7 @@ def main() -> int:
                 print("Slack auth warning: team_id missing from auth.test response")
             elif team_id != browser_config.slack_workspace_id:
                 ok = False
-                print(
-                    "Slack auth mismatch: "
-                    f"expected {browser_config.slack_workspace_id}, got {team_id}"
-                )
+                print(f"Slack auth mismatch: expected {browser_config.slack_workspace_id}, got {team_id}")
                 if browser_config.interactive_login and not browser_config.headless:
                     print("Attempting interactive Slack login to refresh session...")
                     slack._interactive_login_slack()

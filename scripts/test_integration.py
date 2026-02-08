@@ -3,19 +3,16 @@
 Test script to verify TaskMemory, ChannelManager, and DailyAggregator integration.
 """
 
-import sys
 import os
+import sys
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src import (
-    TaskMemory,
-    ChannelManager,
-    DailyAggregator,
-    get_task_memory,
-    get_channel_manager,
     get_aggregator,
+    get_channel_manager,
+    get_task_memory,
 )
 
 
@@ -29,7 +26,7 @@ def test_task_memory():
 
     # Get summary
     summary = memory.get_summary()
-    print(f"\n✅ TaskMemory loaded successfully!")
+    print("\n✅ TaskMemory loaded successfully!")
     print(f"   • Tasks tracked: {summary['total_tasks']}")
     print(f"   • Completed: {summary['completed_tasks']}")
     print(f"   • Team members: {summary['team_members']}")
@@ -39,9 +36,6 @@ def test_task_memory():
     for member in ["Italo Germando", "Francisco Oliveira", "Christopher Belgrave"]:
         tasks = memory.get_tasks_by_assignee(member)
         print(f"\n   📌 {member}: {len(tasks)} tasks")
-
-    return True
-
 
 def test_channel_manager():
     """Test ChannelManager functionality."""
@@ -53,7 +47,7 @@ def test_channel_manager():
 
     # Get summary
     summary = manager.get_summary()
-    print(f"\n✅ ChannelManager loaded successfully!")
+    print("\n✅ ChannelManager loaded successfully!")
     print(f"   • Team members: {summary['team_members']}")
     print(f"   • Total channels: {summary['total_channels']}")
     print(f"   • Categories: {', '.join(summary['categories'])}")
@@ -72,16 +66,13 @@ def test_channel_manager():
         ("Done! All pages published.", "completion"),
         ("Blocked waiting on client content", "blocker"),
         ("Is this the right approach?", "question"),
-        ("Need this ASAP", "urgent")
+        ("Need this ASAP", "urgent"),
     ]
 
     for msg, expected in test_messages:
         types = manager.detect_message_type(msg)
         status = "✓" if expected in types else "✗"
         print(f"      {status} '{msg[:30]}...' -> {types}")
-
-    return True
-
 
 def test_daily_aggregator():
     """Test DailyAggregator functionality."""
@@ -109,9 +100,6 @@ def test_daily_aggregator():
         for action in actions[:3]:
             print(f"      • {action}")
 
-    return True
-
-
 def test_formatted_reports():
     """Test formatted report generation."""
     print("\n" + "=" * 60)
@@ -125,14 +113,11 @@ def test_formatted_reports():
     print("-" * 60)
     report = aggregator.format_daily_report("Christopher Belgrave")
     # Print first 30 lines
-    lines = report.split('\n')
+    lines = report.split("\n")
     for line in lines[:25]:
         print(line)
     if len(lines) > 25:
         print(f"   ... ({len(lines) - 25} more lines)")
-
-    return True
-
 
 def main():
     """Run all integration tests."""
@@ -150,8 +135,8 @@ def main():
     results = []
     for name, test_func in tests:
         try:
-            result = test_func()
-            results.append((name, result))
+            test_func()
+            results.append((name, True))
         except Exception as e:
             print(f"\n❌ {name} FAILED: {e}")
             results.append((name, False))

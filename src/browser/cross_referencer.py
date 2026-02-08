@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
 
 from .notion_client import NotionBrowserClient
 from .slack_client import SlackBrowserClient
 
 logger = logging.getLogger(__name__)
+
 
 class SlackNotionCrossReferencer:
     """
@@ -148,10 +148,7 @@ class SlackNotionCrossReferencer:
             return match.group(1)
 
         # Match dashed format
-        match = re.search(
-            r"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})",
-            url
-        )
+        match = re.search(r"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})", url)
         if match:
             return match.group(1).replace("-", "")
 

@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Any, Protocol, runtime_checkable, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 NOTION_ID_RE = re.compile(r"[0-9a-fA-F]{32}")
 NOTION_ID_DASHED_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -246,17 +246,28 @@ class TicketManager:
         prefixes = ["ss-", "ql-", "project-"]
         for prefix in prefixes:
             if name.startswith(prefix):
-                name = name[len(prefix):]
+                name = name[len(prefix) :]
 
         # Remove common suffixes (apply repeatedly to handle compound suffixes)
         suffixes = [
             "-website-management-and-hosting",  # Compound suffixes first
             "-website-hosting-and-management",
-            "-website-hosting", "-website-management", "-website-build",
-            "-website-edits", "-landing-pages", "-website",
-            "-seo", "-ppc", "-gbp", "-lsa", "-meta",
-            "-full-service", "-call-grading",
-            "-and-hosting", "-management", "-hosting",
+            "-website-hosting",
+            "-website-management",
+            "-website-build",
+            "-website-edits",
+            "-landing-pages",
+            "-website",
+            "-seo",
+            "-ppc",
+            "-gbp",
+            "-lsa",
+            "-meta",
+            "-full-service",
+            "-call-grading",
+            "-and-hosting",
+            "-management",
+            "-hosting",
         ]
 
         # Keep removing suffixes until no more match
@@ -265,7 +276,7 @@ class TicketManager:
             changed = False
             for suffix in suffixes:
                 if name.endswith(suffix):
-                    name = name[:-len(suffix)]
+                    name = name[: -len(suffix)]
                     changed = True
                     break  # Restart from beginning of suffix list
 

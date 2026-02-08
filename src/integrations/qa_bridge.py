@@ -127,8 +127,7 @@ class QABridge:
 
             except Exception as e:
                 logger.warning(
-                    "QA Engine not available: %s. "
-                    "Make sure the parent auto-bugherd project is accessible.",
+                    "QA Engine not available: %s. Make sure the parent auto-bugherd project is accessible.",
                     e,
                 )
                 self._engine = None

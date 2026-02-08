@@ -73,6 +73,7 @@ def main() -> int:
         session.start()
 
         if args.force_dom:
+
             def _disabled_api(*_a, **_kw):
                 raise RuntimeError("not_authed")
 
@@ -100,7 +101,9 @@ def main() -> int:
         history: list[dict[str, Any]] = []
         if channel_id:
             try:
-                history = slack.fetch_channel_history_paginated(channel_id, limit=max(1, args.history_limit), max_pages=1)
+                history = slack.fetch_channel_history_paginated(
+                    channel_id, limit=max(1, args.history_limit), max_pages=1
+                )
                 add_check(
                     "Slack history",
                     len(history) > 0,

@@ -1,7 +1,6 @@
 import unittest
 
-from src.config_validation import validate_config
-from src.config_validation import validate_team_channels_config
+from src.config_validation import validate_config, validate_team_channels_config
 
 
 class ConfigValidationTests(unittest.TestCase):

@@ -254,6 +254,7 @@ BUGHERD_READY_INDICATORS = SelectorSet(
     fallbacks=[".project-tasks", "[data-testid='task-list']", ".ant-layout"],
 )
 
+
 class DOMExtractor:
     """Extract data from Slack DOM using robust selectors."""
 

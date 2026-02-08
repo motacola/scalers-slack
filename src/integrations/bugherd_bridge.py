@@ -45,13 +45,9 @@ class BugHerdClientProtocol(Protocol):
         assigned_to_id: int | None = None,
         status: str = "backlog",
         title: str | None = None,
-    ) -> dict | None:
-        ...
+    ) -> dict | None: ...
 
-    def create_ticket_comment(
-        self, project_id: str, task_id: str, text: str
-    ) -> dict | None:
-        ...
+    def create_ticket_comment(self, project_id: str, task_id: str, text: str) -> dict | None: ...
 
     def update_ticket(
         self,
@@ -61,14 +57,11 @@ class BugHerdClientProtocol(Protocol):
         status: str | None = None,
         priority: str | None = None,
         tag_names: list[str] | None = None,
-    ) -> dict | None:
-        ...
+    ) -> dict | None: ...
 
-    def get_project_members(self, project_id: str) -> list[dict] | None:
-        ...
+    def get_project_members(self, project_id: str) -> list[dict] | None: ...
 
-    def find_member_by_name(self, project_id: str, name: str) -> dict | None:
-        ...
+    def find_member_by_name(self, project_id: str, name: str) -> dict | None: ...
 
 
 class BugHerdBridge:
@@ -159,6 +152,7 @@ class BugHerdBridge:
         try:
             # Try direct import first (if parent src is in path)
             from bugherd_client import BugHerdClient
+
             client = BugHerdClient(api_key=self._api_key)
             logger.info("BugHerd API client initialized successfully")
             return client
@@ -166,11 +160,10 @@ class BugHerdBridge:
             # Try alternative: load the module file directly
             try:
                 import importlib.util
+
                 bugherd_path = os.path.join(_PARENT_SRC, "bugherd_client.py")
                 if os.path.exists(bugherd_path):
-                    spec = importlib.util.spec_from_file_location(
-                        "bugherd_client", bugherd_path
-                    )
+                    spec = importlib.util.spec_from_file_location("bugherd_client", bugherd_path)
                     if spec and spec.loader:
                         module = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(module)
@@ -430,9 +423,7 @@ class BugHerdBridge:
             if result:
                 # Add comment if provided
                 if comment:
-                    self.add_comment_from_slack(
-                        project_name, task_id, f"Status changed to '{status}': {comment}"
-                    )
+                    self.add_comment_from_slack(project_name, task_id, f"Status changed to '{status}': {comment}")
                 logger.info(f"Updated BugHerd ticket #{task_id} status to {status} via {self._mode}")
                 return {"status": "success", "task_id": task_id, "mode": self._mode}
             else:

@@ -4,21 +4,21 @@ import logging
 import time
 from typing import Any, cast
 
+from ..dom_selectors import (
+    BUGHERD_ADD_TASK,
+    BUGHERD_READY_INDICATORS,
+    BUGHERD_TASK_DESCRIPTION,
+    BUGHERD_TASK_TITLE,
+)
 from .base import (
     BaseBrowserClient,
     BrowserAutomationConfig,
     BrowserSession,
     SessionExpiredError,
 )
-from ..dom_selectors import (
-    BUGHERD_ADD_TASK,
-    BUGHERD_READY_INDICATORS,
-    BUGHERD_SUBMIT,
-    BUGHERD_TASK_DESCRIPTION,
-    BUGHERD_TASK_TITLE,
-)
 
 logger = logging.getLogger(__name__)
+
 
 class BugHerdBrowserClient(BaseBrowserClient):
     """
@@ -68,7 +68,6 @@ class BugHerdBrowserClient(BaseBrowserClient):
     def _task_url(self, project_id: str, task_id: str) -> str:
         """Get the URL for a specific task."""
         return f"{self.BUGHERD_APP_URL}/projects/{project_id}/tasks/{task_id}"
-
 
     def _wait_until_ready(self, page, timeout_s: int = 30) -> None:
         """Wait for BugHerd page to be ready."""
@@ -122,32 +121,32 @@ class BugHerdBrowserClient(BaseBrowserClient):
                 if loc.count() > 0:
                     add_btn = loc
                     break
-            
+
             if not add_btn:
                 add_btn = page.get_by_role("button", name="Add Task")
-            
+
             add_btn.click(timeout=10000)
             page.wait_for_timeout(500)
- 
+
             title_input = None
             for sel in BUGHERD_TASK_TITLE.get_all():
                 loc = page.locator(sel).first
                 if loc.count() > 0:
                     title_input = loc
                     break
-            
+
             if title_input:
                 title_input.fill(ticket_title)
             else:
                 page.locator("textarea").first.fill(ticket_title)
- 
+
             desc_input = None
             for sel in BUGHERD_TASK_DESCRIPTION.get_all():
                 loc = page.locator(sel).first
                 if loc.count() > 0:
                     desc_input = loc
                     break
-            
+
             if desc_input:
                 desc_input.fill(description)
 
@@ -292,10 +291,12 @@ class BugHerdBrowserClient(BaseBrowserClient):
                 try:
                     name = item.locator(".member-name, .name").text_content()
                     email = item.locator(".member-email, .email").text_content() or ""
-                    members.append({
-                        "display_name": name.strip() if name else "",
-                        "email": email.strip(),
-                    })
+                    members.append(
+                        {
+                            "display_name": name.strip() if name else "",
+                            "email": email.strip(),
+                        }
+                    )
                 except Exception:
                     pass
             return members
@@ -340,10 +341,12 @@ class BugHerdBrowserClient(BaseBrowserClient):
                     title = title_el.text_content() if title_el.count() > 0 else ""
                     status_el = item.locator(".task-status, .status").first
                     task_status = status_el.text_content() if status_el.count() > 0 else ""
-                    tasks.append({
-                        "title": title.strip() if title else "",
-                        "status": task_status.strip() if task_status else "",
-                    })
+                    tasks.append(
+                        {
+                            "title": title.strip() if title else "",
+                            "status": task_status.strip() if task_status else "",
+                        }
+                    )
                 except Exception:
                     pass
             return tasks
@@ -361,8 +364,10 @@ class BugHerdBrowserClient(BaseBrowserClient):
     def reset_stats(self) -> None:
         """Reset client statistics."""
         super().reset_stats()
-        self.stats.update({
-            "tickets_created": 0,
-            "tickets_updated": 0,
-            "comments_added": 0,
-        })
+        self.stats.update(
+            {
+                "tickets_created": 0,
+                "tickets_updated": 0,
+                "comments_added": 0,
+            }
+        )

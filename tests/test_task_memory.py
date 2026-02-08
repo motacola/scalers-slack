@@ -15,4 +15,3 @@ def test_mark_task_complete_counts_once_for_same_task(tmp_path):
     assert stats["total_tasks"] == 1
     assert stats["total_completions"] == 1
     assert memory.data["metadata"]["total_tasks_tracked"] == 1
-
